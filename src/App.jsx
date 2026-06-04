@@ -5,6 +5,7 @@ import { AuthManager } from './components/AuthManager';
 import { DocumentExplorer } from './components/DocumentExplorer';
 import { RightPanel } from './components/RightPanel';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { ArticlesModal } from './components/ArticlesModal';
 import { searchLegalDatabase } from './utils/legalSearch';
 import { Scale, BookOpen } from 'lucide-react';
 
@@ -25,6 +26,8 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showArticles, setShowArticles] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(true);
 
   // Load bookmarks & track page visits on mount
   useEffect(() => {
@@ -59,6 +62,26 @@ function App() {
     }
     setBookmarks(updatedBookmarks);
     localStorage.setItem('midlex_bookmarks', JSON.stringify(updatedBookmarks));
+  };
+
+  // Sync newsletter subscription status to backend
+  const handleToggleSubscribe = (subscribed) => {
+    setIsSubscribed(subscribed);
+    if (currentUser) {
+      const syncSubscription = async () => {
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          await fetch(`${API_URL}/api/analytics/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: currentUser.email, subscribed })
+          });
+        } catch (err) {
+          console.warn('Failed to sync newsletter subscription status:', err.message);
+        }
+      };
+      syncSubscription();
+    }
   };
 
   // Helper: Get localStorage key for chats depending on current user
@@ -348,6 +371,9 @@ function App() {
         onDeleteChat={handleDeleteChat}
         currentUser={currentUser}
         onAdminClick={() => setShowAdmin(true)}
+        onArticlesClick={() => setShowArticles(true)}
+        isSubscribed={isSubscribed}
+        onToggleSubscribe={handleToggleSubscribe}
       />
 
       {/* Center Panel: Main UI & Assistant Chat */}
@@ -405,6 +431,13 @@ function App() {
       {showAdmin && (
         <AdminDashboardModal 
           onClose={() => setShowAdmin(false)}
+        />
+      )}
+
+      {/* Client Articles Feed Modal */}
+      {showArticles && (
+        <ArticlesModal 
+          onClose={() => setShowArticles(false)}
         />
       )}
     </div>

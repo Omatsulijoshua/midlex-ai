@@ -26,7 +26,8 @@ app.use(express.json());
 let analyticsData = {
   visits: [],
   registrations: [],
-  questions: []
+  questions: [],
+  articles: []
 };
 
 // Seed helper to populate analytics dashboard with realistic historical data on first run
@@ -44,20 +45,21 @@ function seedAnalytics() {
 
   // Seed registered clients (8 mock bar advocates & clients)
   const mockClients = [
-    { email: 'tobias.eze@gmail.com', daysAgo: 14 },
-    { email: 'funmi.alao@yahoo.com', daysAgo: 11 },
-    { email: 'chidi.okafor@outlook.com', daysAgo: 8 },
-    { email: 'amara.kanu@gmail.com', daysAgo: 6 },
-    { email: 'ibrahim.musa@lawyer.com', daysAgo: 4 },
-    { email: 'segun.odubanjo@midlex.com', daysAgo: 2.5 },
-    { email: 'chioma.nwachukwu@bar.ng', daysAgo: 1.2 },
-    { email: 'yusuf.bello@court.gov.ng', daysAgo: 0.1 }
+    { email: 'tobias.eze@gmail.com', daysAgo: 14, subscribed: true },
+    { email: 'funmi.alao@yahoo.com', daysAgo: 11, subscribed: false },
+    { email: 'chidi.okafor@outlook.com', daysAgo: 8, subscribed: true },
+    { email: 'amara.kanu@gmail.com', daysAgo: 6, subscribed: true },
+    { email: 'ibrahim.musa@lawyer.com', daysAgo: 4, subscribed: true },
+    { email: 'segun.odubanjo@midlex.com', daysAgo: 2.5, subscribed: false },
+    { email: 'chioma.nwachukwu@bar.ng', daysAgo: 1.2, subscribed: true },
+    { email: 'yusuf.bello@court.gov.ng', daysAgo: 0.1, subscribed: true }
   ];
 
   mockClients.forEach(c => {
     analyticsData.registrations.push({
       email: c.email,
-      timestamp: now - (c.daysAgo * oneDay)
+      timestamp: now - (c.daysAgo * oneDay),
+      subscribed: c.subscribed
     });
   });
 
@@ -83,6 +85,41 @@ function seedAnalytics() {
       });
     }
   });
+
+  // Seed articles (2 sample legal guides)
+  analyticsData.articles.push({
+    id: 'art_seed_1',
+    title: 'Governor’s Power to Revoke Certificate of Occupancy',
+    subtitle: 'An analysis of Section 28 Land Use Act revocation criteria and compensation rights.',
+    thumbnail: 'property', 
+    content: `Under Section 28 of the Land Use Act of 1978, the Governor of a State in Nigeria holds the power to revoke a Right of Occupancy (C of O) for 'overriding public interest'. 
+
+However, this power is not absolute. The Act mandates that:
+1. **Public Purpose**: The revocation must be for a genuine public purpose (e.g. building roads, schools, hospitals, or extracting minerals).
+2. **Proper Notice**: The holder must be served a valid, formal notice of revocation.
+3. **Compensation**: The holder is constitutionally and statutorily entitled to fair compensation for the value of their unexhausted improvements (buildings, crops, installations) on the land.
+
+If you receive a revocation notice, it is crucial to verify the notice was served appropriately and that the government’s purpose matches legal definitions before negotiating compensation valuation.`,
+    audience: 'all',
+    timestamp: now - 5 * oneDay
+  });
+
+  analyticsData.articles.push({
+    id: 'art_seed_2',
+    title: 'Your Fundamental Rights During A Police Arrest',
+    subtitle: 'Know your rights under Section 34 & 35 of the 1999 Constitution (as amended).',
+    thumbnail: 'rights',
+    content: `The 1999 Constitution of Nigeria protects your personal liberty and human dignity. If you are stopped or arrested by law enforcement, remember these critical safeguards:
+
+- **Right to Silence (Sec 35(2))**: You have the right to remain silent and refuse to answer questions until you consult a lawyer.
+- **Dignity of Person (Sec 34)**: You must not be subjected to torture, cruel, or inhuman treatment.
+- **Bail is Free**: Under Nigerian law, bail is officially free. Holding a suspect beyond 24-48 hours without bringing them before a court of competent jurisdiction is a constitutional violation.
+- **Right to be Informed (Sec 35(3))**: You must be informed immediately, in the language you understand, of the reason for your arrest.
+
+Always remain calm and professional, ask to contact your legal counsel immediately, and avoid signing any statement without a lawyer present.`,
+    audience: 'subscribed',
+    timestamp: now - 2 * oneDay
+  });
 }
 
 // Load analytics database from disk or seed it if missing
@@ -92,6 +129,11 @@ function loadAnalytics() {
       const raw = fs.readFileSync(ANALYTICS_FILE, 'utf8');
       analyticsData = JSON.parse(raw);
       console.log('📊 Loaded analytics database successfully.');
+      
+      // Safety checks for new properties
+      if (!analyticsData.articles) {
+        analyticsData.articles = [];
+      }
     } else {
       console.log('📊 Analytics file not found. Seeding initial mock database...');
       seedAnalytics();
@@ -148,14 +190,111 @@ app.post('/api/analytics/visit', (req, res) => {
 app.post('/api/analytics/register', (req, res) => {
   const { email } = req.body;
   if (email && email.trim() !== '') {
-    // Avoid duplicating same client registration within short periods; log entry
-    analyticsData.registrations.push({
-      email: email.trim(),
-      timestamp: Date.now()
-    });
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Check if email already registered
+    const existing = analyticsData.registrations.find(r => r.email.toLowerCase() === cleanEmail);
+    if (!existing) {
+      analyticsData.registrations.push({
+        email: cleanEmail,
+        timestamp: Date.now(),
+        subscribed: true // Default to opt-in for first login
+      });
+    } else {
+      existing.timestamp = Date.now(); // Update last active timestamp
+    }
     saveAnalytics();
   }
   res.json({ success: true });
+});
+
+// Update client newsletter subscription opt-in
+app.post('/api/analytics/subscribe', (req, res) => {
+  const { email, subscribed } = req.body;
+  if (email && email.trim() !== '') {
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = analyticsData.registrations.find(r => r.email.toLowerCase() === cleanEmail);
+    
+    if (existing) {
+      existing.subscribed = !!subscribed;
+      console.log(`🔔 Subscription status updated for ${cleanEmail}: ${existing.subscribed}`);
+    } else {
+      analyticsData.registrations.push({
+        email: cleanEmail,
+        timestamp: Date.now(),
+        subscribed: !!subscribed
+      });
+    }
+    saveAnalytics();
+  }
+  res.json({ success: true });
+});
+
+// Fetch all articles
+app.get('/api/articles', (req, res) => {
+  const list = [...(analyticsData.articles || [])].sort((a, b) => b.timestamp - a.timestamp);
+  res.json({ success: true, articles: list });
+});
+
+// Publish Article & Simulate Email Dispatch Endpoint
+app.post('/api/admin/publish-article', (req, res) => {
+  const { email, password, title, subtitle, thumbnail, content, audience } = req.body;
+
+  if (email === 'midlexllp01@gmail.com' && password === 'Admin@123') {
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and Content are required.' });
+    }
+
+    // Create article object
+    const newArticle = {
+      id: `art_${Date.now()}`,
+      title: title.trim(),
+      subtitle: (subtitle || '').trim(),
+      thumbnail: thumbnail || 'scale',
+      content: content.trim(),
+      audience: audience || 'all',
+      timestamp: Date.now()
+    };
+
+    if (!analyticsData.articles) {
+      analyticsData.articles = [];
+    }
+    analyticsData.articles.push(newArticle);
+    saveAnalytics();
+
+    // Determine recipient emails
+    let targetEmails = [];
+    if (audience === 'all') {
+      targetEmails = analyticsData.registrations.map(r => r.email);
+    } else {
+      // Filter for opt-in subscribed clients only
+      targetEmails = analyticsData.registrations
+        .filter(r => r.subscribed === true)
+        .map(r => r.email);
+    }
+
+    // Deduplicate emails
+    const uniqueRecipients = [...new Set(targetEmails.map(e => e.toLowerCase()))];
+
+    // Log the simulation of SMTP dispatching
+    console.log(`\n📧 ===== EMAIL DISPATCH SIMULATION START =====`);
+    console.log(`📝 Newsletter Article: "${title}"`);
+    console.log(`👥 Target Group Filter: ${audience === 'all' ? 'All Registered Clients' : 'Subscribed Clients Only'}`);
+    console.log(`✉️ Dispatching to ${uniqueRecipients.length} client email(s)...`);
+    
+    uniqueRecipients.forEach(emailAddr => {
+      console.log(`   👉 [DISPATCHED] To: ${emailAddr} | Subject: [Midlex LLP] ${title}`);
+    });
+    console.log(`📧 ===== EMAIL DISPATCH SIMULATION COMPLETE =====\n`);
+
+    return res.json({
+      success: true,
+      article: newArticle,
+      recipientsCount: uniqueRecipients.length
+    });
+  } else {
+    return res.status(401).json({ error: 'Invalid admin credentials.' });
+  }
 });
 
 // Admin Login & Stats Calculator Endpoint
@@ -189,6 +328,9 @@ app.post('/api/admin/login', (req, res) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 15); // Show top 15 questions
 
+    // Historical articles list
+    const articles = [...(analyticsData.articles || [])].sort((a, b) => b.timestamp - a.timestamp);
+
     return res.json({
       success: true,
       stats: {
@@ -197,7 +339,8 @@ app.post('/api/admin/login', (req, res) => {
         visitsThisWeek,
         visitsThisMonth,
         topQuestions,
-        registrations: registrations.slice(0, 30) // Return last 30 registration activities
+        registrations: registrations.slice(0, 30), // Return last 30 registration activities
+        articles: articles // History of published updates
       }
     });
   } else {
