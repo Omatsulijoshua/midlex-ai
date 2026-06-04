@@ -156,6 +156,34 @@ export const legalData = [
     keywords: ["revoke", "revocation", "compulsory acquisition", "compensation", "public interest", "demolition", "government take", "eminent domain"]
   },
   {
+    id: "limitation-adverse-possession",
+    act: "Nigerian limitation and adverse possession principles",
+    category: "Property & Land Law",
+    chapter: "Recovery of Land",
+    part: "Limitation period",
+    section: "Adverse possession / recovery of land",
+    title: "25 days cannot create ownership of another person's house",
+    content: "Adverse possession is not created by merely staying in another person's house for a few days. Nigerian limitation principles generally require open, exclusive, continuous and adverse possession for the statutory limitation period, commonly twelve years for private land recovery actions, before the true owner's court remedy may become barred.",
+    reasoning: "Living in someone's house for 25 days does not transfer ownership. If the occupation is without permission, the owner can treat the occupier as a trespasser or unlawful occupant and may seek recovery of possession, ejectment, damages or other remedies. If the stay was with permission, as a tenant, guest, caretaker or licensee, it is not adverse possession.",
+    keywords: ["adverse possession", "limitation", "limitation period", "12 years", "twelve years", "25 days", "days", "living", "staying", "occupy", "occupation", "occupying", "squatter", "squat", "house", "home", "property", "take over", "take property", "ownership", "land recovery", "recovery of land", "unlawful occupation", "without permission"],
+    sourceUrl: "https://lawnigeria.com/2019/10/15/limitation-law-of-lagos-state/",
+    sourcePage: "Lagos State Limitation Law, recovery of land and adverse possession provisions"
+  },
+  {
+    id: "property-trespass-unlawful-occupation",
+    act: "Nigerian property and trespass law principles",
+    category: "Property & Land Law",
+    chapter: "Possession",
+    part: "Trespass and recovery",
+    section: "Unlawful occupation of house or land",
+    title: "Unauthorized occupation can amount to trespass",
+    content: "A person who enters or remains on another person's land or house without lawful authority, consent, tenancy or other right may be treated as a trespasser or unlawful occupier. Possession alone is different from ownership, and a lawful owner may take civil steps to recover possession through the proper process.",
+    reasoning: "The practical answer is no: you should not try to take over someone's house by staying there. Short occupation is not a shortcut to ownership and can expose the occupier to eviction proceedings, damages for trespass and, depending on the facts, police or criminal complaints if force, breaking in, fraud or threats are involved.",
+    keywords: ["trespass", "trespasser", "unlawful occupation", "illegal occupation", "without permission", "house", "home", "land", "property", "occupy", "living", "staying", "squatter", "squat", "take over", "owner", "ownership", "eviction", "ejectment", "recover possession", "damages", "25 days", "days"],
+    sourceUrl: "https://oal.law/adverse-possession-in-nigeria-a-legal-practitioners-perspective/",
+    sourcePage: "Overview of adverse possession requirements in Nigeria"
+  },
+  {
     id: "crim-sec383",
     act: "Criminal Code Act (Southern States)",
     category: "Criminal Law",

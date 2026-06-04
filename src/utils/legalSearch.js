@@ -55,6 +55,18 @@ const SPELLING_CORRECTIONS = new Map([
   ['wirte', 'write'],
   ['poperty', 'property'],
   ['roperty', 'property'],
+  ['ake', 'take'],
+  ['lavinging', 'living'],
+  ['lavining', 'living'],
+  ['leavinging', 'living'],
+  ['livng', 'living'],
+  ['livin', 'living'],
+  ['datys', 'days'],
+  ['dats', 'days'],
+  ['dayz', 'days'],
+  ['somone', 'someone'],
+  ['someones', "someone's"],
+  ['sombody', 'somebody'],
   ['inheritence', 'inheritance'],
   ['sucession', 'succession'],
   ['succesion', 'succession'],
@@ -114,6 +126,13 @@ const SUCCESSION_TOKENS = new Set([
   'father', 'dad', 'deceased', 'late', 'brother', 'sister', 'siblings', 'children',
   'first', 'son', 'eldest', 'tradition', 'custom', 'customary', 'family', 'land',
   'beneficiary', 'share', 'sharing', 'administrator', 'administration'
+]);
+
+const ADVERSE_POSSESSION_TOKENS = new Set([
+  'adverse', 'possession', 'limitation', 'squatter', 'squat', 'occupy', 'occupation',
+  'occupying', 'living', 'staying', 'house', 'home', 'property', 'land', 'owner',
+  'ownership', 'take', 'over', 'days', '25', 'trespass', 'trespasser', 'eviction',
+  'ejectment', 'permission', 'unlawful', 'illegal'
 ]);
 
 function normalizeQueryText(query) {
@@ -325,6 +344,18 @@ export function searchLegalDatabase(query) {
       }
     }
 
+    const hasAdversePossessionIssue = hasAny(tokens, ADVERSE_POSSESSION_TOKENS);
+
+    if (hasAdversePossessionIssue) {
+      if (['limitation-adverse-possession', 'property-trespass-unlawful-occupation'].includes(item.id)) {
+        score += item.id === 'limitation-adverse-possession' ? 45 : 35;
+      }
+
+      if (item.category !== 'Property & Land Law' && !['const-ch4-sec37'].includes(item.id)) {
+        score -= 20;
+      }
+    }
+
     const hasAnimalIssue = hasAny(tokens, ANIMAL_TOKENS);
     const hasHumanHomicideIssue = hasAny(tokens, HUMAN_HOMICIDE_TOKENS);
 
@@ -401,11 +432,17 @@ export function searchLegalDatabase(query) {
     'family-property-head-trustee',
     'ukeje-v-ukeje-inheritance'
   ].includes(m.item.id));
+  const hasAdversePossessionMatch = topMatches.some(m => [
+    'limitation-adverse-possession',
+    'property-trespass-unlawful-occupation'
+  ].includes(m.item.id));
 
   responseText = withConclusion(
     responseText,
     hasSuccessionMatch
       ? "Your brother should not simply take all the property because he is first son. Confirm whether there is a valid will, identify the type of property and marriage/custom involved, preserve title documents, and consult a probate or property lawyer about letters of administration or a family settlement."
+      : hasAdversePossessionMatch
+        ? "You cannot take over someone's house merely by living there for 25 days. Leave if you have no lawful permission, do not use self-help or force, and let the owner or occupier resolve possession through proper notices, police reports where necessary, or court recovery proceedings."
       : "Keep evidence, report the matter to the appropriate authority where needed, and avoid admitting fault until the facts and documents have been properly reviewed."
   );
 
