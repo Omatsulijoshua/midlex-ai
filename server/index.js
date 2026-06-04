@@ -379,11 +379,11 @@ app.post('/api/chat', async (req, res) => {
         const systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
 The user sent a message or asked a question: "${message}".
 
-Please respond in character:
+Please respond in character as a professional legal counsel:
 1. If the message is a general greeting or introduction, introduce yourself and explain what you can do (e.g., answering questions on the Constitution, Land Use Act, Criminal Code, and Electoral Act 2022).
-2. If the user is asking a specific legal question that is not in our primary local reference database (e.g., about a car accident/rear-end collision, contracts, family law, etc.), please answer their question directly and professionally using your general knowledge of the Nigerian Legal System (e.g., relevant tort principles of negligence, traffic laws, etc.).
-3. Clearly and politely note at the beginning or end of your response that while this specific topic is not covered in our primary local reference database, you are providing the general legal position under Nigerian Law.
-4. Keep the tone helpful, professional, and authoritative.`;
+2. If the user is asking a specific legal question (e.g., about a car accident, vehicle towing, contracts, family law, etc.), please answer their question directly, thoroughly, and professionally using your general knowledge of the Nigerian Legal System (e.g., relevant tort principles, state traffic laws, etc.).
+3. Keep the tone helpful, professional, and authoritative.
+4. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
         const result = await model.generateContent(systemPrompt);
         const generatedText = result.response.text();
@@ -433,7 +433,8 @@ Instructions:
 2. Quote or reference specific sections (e.g. **Section 34 of the Constitution** or **Section 1 of the Land Use Act**) directly to back up your points.
 3. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
 4. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
-5. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system, but clearly state that it is general legal information and not explicitly cited in the provided documents.`;
+5. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system.
+6. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
       const result = await model.generateContent(systemPrompt);
       const explanation = result.response.text();
