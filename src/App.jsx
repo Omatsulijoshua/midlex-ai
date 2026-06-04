@@ -13,6 +13,16 @@ const getChatsStorageKey = (user) => {
   return user ? `midlex_user_chats_${user.id}` : 'midlex_guest_chats';
 };
 
+const buildRequestHistory = (items) => {
+  return items
+    .filter(item => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string')
+    .slice(-10)
+    .map(item => ({
+      role: item.role,
+      content: item.content.trim().slice(0, 1200)
+    }));
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -247,8 +257,12 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: text }),
-      }, 15000);
+        body: JSON.stringify({
+          message: text,
+          chatId: activeChatId,
+          conversationHistory: buildRequestHistory(messages)
+        }),
+      }, 20000);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
