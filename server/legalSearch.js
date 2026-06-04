@@ -68,10 +68,20 @@ export function searchLegalDatabase(query) {
     for (const token of tokens) {
       let tokenMatched = false;
 
+      // Simple suffix stripping (stemming) to handle pluralization and verb tenses
+      let stem = token;
+      if (token.endsWith('ing')) {
+        stem = token.slice(0, -3);
+      } else if (token.endsWith('ed') && !token.endsWith('eed')) {
+        stem = token.slice(0, -2);
+      } else if (token.endsWith('s') && !token.endsWith('ss')) {
+        stem = token.slice(0, -1);
+      }
+
       // Smart boundary regex:
-      // If token is 3 letters (e.g. 'car', 'law', 'act'), require exact whole-word or its plural (e.g. \bcars?\b)
-      // If token is 4+ letters (e.g. 'arrest', 'steal'), use word prefix (e.g. \barrest) to match arrested, stealing, etc.
-      const regexStr = token.length <= 3 ? `\\b${token}s?\\b` : `\\b${token}`;
+      // If token stem is 3 letters (e.g. 'car', 'law', 'act'), require exact whole-word or its plural (e.g. \bcars?\b)
+      // If token stem is 4+ letters (e.g. 'arrest', 'steal'), use word prefix (e.g. \barrest) to match arrested, stealing, etc.
+      const regexStr = stem.length <= 3 ? `\\b${stem}s?\\b` : `\\b${stem}`;
       const regex = new RegExp(regexStr, 'i');
 
       if (regex.test(item.category)) {
@@ -118,7 +128,12 @@ export function searchLegalDatabase(query) {
     }
 
     if (score > 0) {
-      results.push({ item, score, matchedTokens });
+      // Enforce a minimum query token coverage threshold of 35%
+      // This prevents single-word accidental matches on long questions
+      const coverage = matchedTokens.length / tokens.length;
+      if (coverage >= 0.35) {
+        results.push({ item, score, matchedTokens });
+      }
     }
   }
 
