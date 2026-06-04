@@ -31,6 +31,19 @@ function getGeminiKeyDiagnostics() {
   };
 }
 
+function formatGeminiError(error, diagnostics) {
+  const message = error.message || 'Gemini API failed.';
+  const keyLabel = diagnostics.prefix && diagnostics.suffix
+    ? `${diagnostics.prefix}${diagnostics.suffix}`
+    : 'the configured key';
+
+  if (diagnostics.configured && (error.status === 401 || error.status === 403 || /invalid authentication credentials/i.test(message))) {
+    return `Gemini rejected ${keyLabel} from the production server. The key is present, but Google is not authorizing it from Vercel. Create or rotate a Gemini API key in Google AI Studio, restrict it to the Gemini API only, avoid IP/referrer application restrictions for this serverless deployment, set it as GEMINI_API_KEY in Vercel Production, then redeploy.`;
+  }
+
+  return message;
+}
+
 function parseBody(req) {
   if (!req.body) return {};
   if (Buffer.isBuffer(req.body)) {
@@ -155,6 +168,13 @@ async function callGemini(prompt, modelName, apiKey) {
   return text;
 }
 
+function shouldTryNextGeminiModel(error) {
+  const retryableStatuses = new Set([404, 429, 500, 502, 503, 504]);
+  const message = error.message || '';
+
+  return retryableStatuses.has(error.status) || /not found|not supported|high demand|overloaded|temporarily unavailable/i.test(message);
+}
+
 async function generateGeminiAnswer(prompt) {
   const apiKey = normalizeGeminiApiKey(process.env.GEMINI_API_KEY);
 
@@ -178,7 +198,7 @@ async function generateGeminiAnswer(prompt) {
       };
     } catch (error) {
       lastError = error;
-      if (!/404|not found|not supported/i.test(error.message || '')) {
+      if (!shouldTryNextGeminiModel(error)) {
         throw error;
       }
     }
@@ -213,10 +233,11 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     const status = error.status || 502;
+    const keyDiagnostics = getGeminiKeyDiagnostics();
     return res.status(status).json({
-      error: error.message || 'Gemini API failed.',
+      error: formatGeminiError(error, keyDiagnostics),
       engine: 'gemini',
-      keyDiagnostics: getGeminiKeyDiagnostics()
+      keyDiagnostics
     });
   }
 }

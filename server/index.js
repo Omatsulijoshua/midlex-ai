@@ -137,6 +137,12 @@ async function generateGeminiText(prompt) {
   const modelNames = [...new Set([geminiModel, geminiFallbackModel])];
   let lastError = null;
 
+  function shouldTryNextModel(err) {
+    const message = err?.message || '';
+    const status = err?.status || err?.statusCode;
+    return [404, 429, 500, 502, 503, 504].includes(status) || /not found|not supported|high demand|overloaded|temporarily unavailable/i.test(message);
+  }
+
   for (const modelName of modelNames) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
@@ -144,9 +150,7 @@ async function generateGeminiText(prompt) {
       return result.response.text();
     } catch (err) {
       lastError = err;
-      const message = err?.message || '';
-      const canRetry = /404|not found|not supported/i.test(message);
-      if (!canRetry) {
+      if (!shouldTryNextModel(err)) {
         throw err;
       }
       console.warn(`⚠️ Gemini model "${modelName}" unavailable. Trying fallback model if configured...`);
