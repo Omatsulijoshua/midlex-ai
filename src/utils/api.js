@@ -1,7 +1,9 @@
 export function getApiUrl() {
-  const configuredUrl = import.meta.env.PROD
-    ? import.meta.env.VITE_PRODUCTION_API_URL || ''
-    : import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const configuredUrl = (
+    import.meta.env.VITE_PRODUCTION_API_URL ||
+    import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '' : 'http://localhost:5000')
+  ).trim().replace(/\/+$/, '');
   const isLocalUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(configuredUrl);
 
   if (import.meta.env.PROD && isLocalUrl) {
