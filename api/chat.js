@@ -4,6 +4,30 @@ import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash';
 
+function normalizeGeminiApiKey(value) {
+  return (value || '').trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+function getGeminiKeyDiagnostics() {
+  const rawKey = process.env.GEMINI_API_KEY || '';
+  const trimmedKey = rawKey.trim();
+  const normalizedKey = normalizeGeminiApiKey(rawKey);
+
+  return {
+    configured: normalizedKey.length > 0,
+    length: rawKey.length,
+    trimmedLength: trimmedKey.length,
+    normalizedLength: normalizedKey.length,
+    prefix: normalizedKey ? `${normalizedKey.slice(0, 4)}...` : '',
+    suffix: normalizedKey ? `...${normalizedKey.slice(-4)}` : '',
+    hasLeadingOrTrailingWhitespace: rawKey !== trimmedKey,
+    hasWrappingQuotes: trimmedKey !== normalizedKey,
+    hasEqualsPrefix: /^GEMINI_API_KEY\s*=/.test(trimmedKey),
+    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    fallbackModel: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
+  };
+}
+
 function parseBody(req) {
   if (!req.body) return {};
   if (Buffer.isBuffer(req.body)) {
@@ -126,9 +150,9 @@ async function callGemini(prompt, modelName, apiKey) {
 }
 
 async function generateGeminiAnswer(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = normalizeGeminiApiKey(process.env.GEMINI_API_KEY);
 
-  if (!apiKey || apiKey.trim() === '') {
+  if (!apiKey) {
     const error = new Error('GEMINI_API_KEY is not configured on the server.');
     error.status = 503;
     throw error;
@@ -185,7 +209,8 @@ export default async function handler(req, res) {
     const status = error.status || 502;
     return res.status(status).json({
       error: error.message || 'Gemini API failed.',
-      engine: 'gemini'
+      engine: 'gemini',
+      keyDiagnostics: getGeminiKeyDiagnostics()
     });
   }
 }

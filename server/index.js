@@ -112,12 +112,16 @@ app.get('/', (req, res) => {
 });
 
 // Initialize Google Gemini API
-const apiKey = process.env.GEMINI_API_KEY;
+function normalizeGeminiApiKey(value) {
+  return (value || '').trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+const apiKey = normalizeGeminiApiKey(process.env.GEMINI_API_KEY);
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const geminiFallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
 let genAI = null;
 
-if (apiKey && apiKey.trim() !== '') {
+if (apiKey) {
   console.log('✅ Gemini API Key detected. Initializing Google Gen AI SDK...');
   try {
     genAI = new GoogleGenerativeAI(apiKey);
