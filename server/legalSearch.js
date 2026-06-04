@@ -15,7 +15,14 @@ const STOPWORDS = new Set([
   'under', 'until', 'up', 'very', 'was', 'wasnt', 'we', 'wed', 'well', 'were', 'weve', 'werent', 
   'what', 'whats', 'when', 'whens', 'where', 'wheres', 'which', 'while', 'who', 'whos', 'whom', 
   'why', 'whys', 'with', 'wont', 'would', 'wouldnt', 'you', 'youd', 'youll', 'youre', 'youve', 
-  'your', 'yours', 'yourself', 'yourselves', 'my', 'mine', 'shall', 'should', 'can', 'will', 'may', 'give', 'get'
+  'your', 'yours', 'yourself', 'yourselves', 'my', 'mine', 'shall', 'should', 'can', 'will', 'may', 'give', 'get',
+  'person', 'persons', 'people', 'individual', 'individuals', 'someone', 'anyone', 'everyone',
+  'back', 'take', 'takes', 'taking', 'took', 'give', 'gives', 'giving', 'gave', 'get', 'gets', 'getting', 'got',
+  'make', 'makes', 'making', 'made', 'go', 'goes', 'going', 'went', 'claim', 'claims', 'claiming', 'claming', 'claimed',
+  'say', 'says', 'saying', 'said', 'ask', 'asks', 'asking', 'asked', 'answer', 'answers', 'answering', 'answered',
+  'know', 'knows', 'knowing', 'knew', 'thing', 'things', 'case', 'cases', 'matter', 'matters', 'point', 'points',
+  'fact', 'facts', 'way', 'ways', 'law', 'laws', 'legal', 'illegal', 'section', 'sections', 'act', 'acts', 'provision',
+  'provisions', 'code', 'codes', 'constitute', 'constitutes', 'constitution', 'constitutions'
 ]);
 
 export function searchLegalDatabase(query) {
@@ -27,11 +34,14 @@ export function searchLegalDatabase(query) {
     };
   }
 
-  const tokens = query
-    .toLowerCase()
+  // Pre-process and normalize common abbreviations before tokenizing
+  let normalizedQuery = query.toLowerCase();
+  normalizedQuery = normalizedQuery.replace(/c\s*of\s*o|c-of-o|c\.of\.o/g, 'certificate of occupancy');
+
+  const tokens = normalizedQuery
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
-    .filter(token => token.length > 1 && !STOPWORDS.has(token));
+    .filter(token => (token.length > 2 || /^\d+$/.test(token)) && !STOPWORDS.has(token)); // Filter tokens of length > 2 or numeric tokens
 
   if (tokens.length === 0) {
     const lowerQuery = query.toLowerCase().trim();
@@ -58,39 +68,45 @@ export function searchLegalDatabase(query) {
     for (const token of tokens) {
       let tokenMatched = false;
 
-      if (item.category.toLowerCase().includes(token)) {
+      // Smart boundary regex:
+      // If token is 3 letters (e.g. 'car', 'law', 'act'), require exact whole-word or its plural (e.g. \bcars?\b)
+      // If token is 4+ letters (e.g. 'arrest', 'steal'), use word prefix (e.g. \barrest) to match arrested, stealing, etc.
+      const regexStr = token.length <= 3 ? `\\b${token}s?\\b` : `\\b${token}`;
+      const regex = new RegExp(regexStr, 'i');
+
+      if (regex.test(item.category)) {
         score += 15;
         tokenMatched = true;
       }
 
-      if (item.act.toLowerCase().includes(token)) {
+      if (regex.test(item.act)) {
         score += 10;
         tokenMatched = true;
       }
 
-      if (item.title.toLowerCase().includes(token)) {
+      if (regex.test(item.title)) {
         score += 8;
         tokenMatched = true;
       }
 
-      const keywordMatches = item.keywords.filter(kw => kw.toLowerCase().includes(token));
+      const keywordMatches = item.keywords.filter(kw => regex.test(kw));
       if (keywordMatches.length > 0) {
         score += 5 * keywordMatches.length;
         tokenMatched = true;
       }
 
-      if (item.section.toLowerCase().includes(token)) {
+      if (regex.test(item.section)) {
         score += 8;
         tokenMatched = true;
       }
 
-      const contentMatches = (item.content.toLowerCase().match(new RegExp(token, 'g')) || []).length;
+      const contentMatches = (item.content.match(new RegExp(regexStr, 'gi')) || []).length;
       if (contentMatches > 0) {
         score += 2 * contentMatches;
         tokenMatched = true;
       }
 
-      const reasoningMatches = (item.reasoning.toLowerCase().match(new RegExp(token, 'g')) || []).length;
+      const reasoningMatches = (item.reasoning.match(new RegExp(regexStr, 'gi')) || []).length;
       if (reasoningMatches > 0) {
         score += 1 * reasoningMatches;
         tokenMatched = true;

@@ -231,6 +231,7 @@ function App() {
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setIsGenerating(true);
+    const startTime = Date.now();
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -248,6 +249,12 @@ function App() {
       }
 
       const data = await response.json();
+
+      // Enforce minimum thinking delay
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 3000 - elapsed));
+      }
 
       const assistantMessage = { 
         role: 'assistant', 
@@ -273,7 +280,10 @@ function App() {
       // Fallback local engine search
       const searchResults = searchLegalDatabase(text);
 
-      // Simulate minor processing lag for fallback so it feels realistic
+      // Enforce 3000ms delay to display thinking animation before returning
+      const elapsed = Date.now() - startTime;
+      const remainingTime = Math.max(0, 3000 - elapsed);
+
       setTimeout(() => {
         const assistantMessage = { 
           role: 'assistant', 
@@ -292,7 +302,7 @@ function App() {
 
         // Save to chat list
         updateChatsList(activeChatId, finalMessages, newSources, newReasoning, text);
-      }, 800);
+      }, remainingTime);
     }
   };
 

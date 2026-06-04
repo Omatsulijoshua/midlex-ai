@@ -3,7 +3,36 @@ import { Send, Sparkles, Trash2, ArrowRight, BookOpen } from 'lucide-react';
 
 export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerating, onSuggestionClick }) {
   const [input, setInput] = useState('');
+  const [thinkingText, setThinkingText] = useState('Searching legal database...');
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setThinkingText('Searching legal database...');
+      return;
+    }
+
+    const phases = [
+      'Searching legal database...',
+      'Analyzing relevant statutory provisions...',
+      'Synthesizing counsel rationale...',
+      'Drafting final response...'
+    ];
+
+    let currentPhase = 0;
+    setThinkingText(phases[0]);
+
+    const interval = setInterval(() => {
+      currentPhase++;
+      if (currentPhase < phases.length) {
+        setThinkingText(phases[currentPhase]);
+      } else {
+        clearInterval(interval);
+      }
+    }, 850);
+
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   const suggestions = [
     {
@@ -127,7 +156,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
           <div className="message-bubble assistant">
             <div className="avatar assistant">AI</div>
             <div className="message-content" style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginRight: '10px' }}>Consulting laws...</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginRight: '10px' }}>{thinkingText}</span>
               <div className="typing-dots">
                 <span></span><span></span><span></span>
               </div>
