@@ -56,6 +56,12 @@ const SPELLING_CORRECTIONS = new Map([
   ['towd', 'towed'],
   ['toed', 'towed'],
   ['impunded', 'impounded'],
+  ['fromthe', 'from the'],
+  ['jamed', 'jammed'],
+  ['jamd', 'jammed'],
+  ['reveresed', 'reversed'],
+  ['reverseded', 'reversed'],
+  ['claming', 'claiming'],
   ['spouce', 'spouse'],
   ['housband', 'husband'],
   ['husban', 'husband'],
@@ -80,6 +86,12 @@ const ROAD_TRAFFIC_TOKENS = new Set([
   'car', 'cars', 'vehicle', 'vehicles', 'towed', 'tow', 'towing', 'tolled', 'impound',
   'impounded', 'parking', 'parked', 'road', 'highway', 'traffic', 'lastma', 'vio',
   'breakdown', 'obstruction', 'abandoned', 'ticket', 'demurrage'
+]);
+
+const CRASH_TOKENS = new Set([
+  'accident', 'crash', 'collision', 'jammed', 'jamed', 'hit', 'rear', 'rearend', 'behind',
+  'back', 'reversed', 'reverse', 'damage', 'bumper', 'insurance', 'claim', 'claiming',
+  'fault', 'liability', 'negligence', 'witness', 'dashcam'
 ]);
 
 function normalizeQueryText(query) {
@@ -161,6 +173,14 @@ function fuzzyMatches(token, item) {
 
 function hasAny(tokens, lookupSet) {
   return tokens.some(token => lookupSet.has(token));
+}
+
+function withConclusion(text, conclusion) {
+  if (/(\*\*)?conclusion(\*\*)?:?/i.test(text)) {
+    return text;
+  }
+
+  return `${text.trim()}\n\n**Conclusion:** ${conclusion}`;
 }
 
 export function searchLegalDatabase(query) {
@@ -285,6 +305,7 @@ export function searchLegalDatabase(query) {
     }
 
     const hasRoadTrafficIssue = hasAny(tokens, ROAD_TRAFFIC_TOKENS);
+    const hasCrashIssue = hasAny(tokens, CRASH_TOKENS);
 
     if (hasRoadTrafficIssue) {
       if (item.category === 'Road Traffic Law') {
@@ -293,6 +314,16 @@ export function searchLegalDatabase(query) {
 
       if (item.act.toLowerCase().includes('aviation')) {
         score -= 50;
+      }
+    }
+
+    if (hasCrashIssue) {
+      if (['frsc-failure-report-crash', 'frsc-emergency-report', 'traffic-collision-evidence'].includes(item.id)) {
+        score += item.id === 'traffic-collision-evidence' ? 40 : 24;
+      }
+
+      if (item.category !== 'Road Traffic Law' && item.category !== 'Constitution') {
+        score -= 25;
       }
     }
 
@@ -330,6 +361,11 @@ export function searchLegalDatabase(query) {
     });
     responseText += `You can review the exact legal texts and reasoning details in the reference panel.`;
   }
+
+  responseText = withConclusion(
+    responseText,
+    "Keep evidence, report the matter to the appropriate authority where needed, and avoid admitting fault until the facts and documents have been properly reviewed."
+  );
 
   const sources = topMatches.map(m => ({
     id: m.item.id,

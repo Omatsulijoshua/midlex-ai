@@ -332,6 +332,48 @@ export const legalData = [
     sourcePage: "TMS FAQ, Enforcement process"
   },
   {
+    id: "frsc-failure-report-crash",
+    act: "Federal Road Safety Corps offences and penalties schedule",
+    category: "Road Traffic Law",
+    chapter: "Road Traffic Crash Reporting",
+    part: "Crash reporting and enforcement",
+    section: "Failure to Report Road Crash",
+    title: "Failure to report a road crash",
+    content: "The FRSC offences and penalties schedule lists failure to report road crash as an offence, carrying penalty points and a monetary penalty.",
+    reasoning: "For a rear-end collision or disputed accident, the practical first step is to report the crash to the appropriate traffic authority or police and obtain a report/reference number. That report helps preserve an official record where one driver says the other reversed or caused the collision.",
+    keywords: ["accident", "crash", "collision", "road crash", "report accident", "report crash", "police report", "frsc report", "rear end", "rear-ended", "hit from behind", "jammed from back", "jammed", "jamed", "reversed", "insurance", "claim", "liability", "fault", "evidence", "car", "vehicle"],
+    sourceUrl: "https://www.frsc.gov.ng/offences-and-penalties",
+    sourcePage: "FRSC offences table, Failure to Report Road Crash"
+  },
+  {
+    id: "frsc-emergency-report",
+    act: "Federal Road Safety Corps public safety services",
+    category: "Road Traffic Law",
+    chapter: "Emergency Response",
+    part: "Crash reporting and response",
+    section: "FRSC Emergency Reporting",
+    title: "Report road crashes and emergencies promptly",
+    content: "FRSC public services identify road safety, enforcement and emergency response as core functions and provide the emergency toll-free number 122 for help or prompt crash and emergency reporting.",
+    reasoning: "Where there is injury, obstruction, serious damage, refusal to cooperate, or a dispute over who caused a collision, the safer course is to call FRSC/police, preserve the scene if safe, and document the vehicles before they are moved.",
+    keywords: ["accident", "crash", "collision", "emergency", "injury", "frsc", "122", "police", "report", "scene", "witness", "photo", "video", "dashcam", "evidence", "rear end", "reversed", "jammed", "car", "vehicle"],
+    sourceUrl: "https://www.frsc.gov.ng/services",
+    sourcePage: "FRSC Services, emergency toll-free number 122"
+  },
+  {
+    id: "traffic-collision-evidence",
+    act: "Nigerian road traffic accident practice",
+    category: "Road Traffic Law",
+    chapter: "Civil Liability",
+    part: "Negligence and evidence",
+    section: "Rear-end collision evidence",
+    title: "Evidence in disputed rear-end collisions",
+    content: "In a disputed vehicle collision, evidence may include vehicle positions, point of impact, damage pattern, road marks, photographs, dashcam footage, witnesses, police or FRSC reports, insurance records and repair estimates.",
+    reasoning: "If your car was hit from behind and the other driver claims you reversed, the answer normally turns on evidence. Rear damage alone may support your version, but you should document the scene, get witness details, report the crash, notify your insurer and avoid admitting fault before the facts are recorded.",
+    keywords: ["accident", "crash", "collision", "rear end", "rear-ended", "hit from behind", "from the back", "fromthe back", "jammed from back", "jammed", "jamed", "reversed", "reverse", "damage", "bumper", "insurance", "claim", "fault", "liability", "negligence", "evidence", "dashcam", "witness", "police report", "frsc report", "car", "vehicle"],
+    sourceUrl: "https://www.frsc.gov.ng/",
+    sourcePage: "FRSC road safety and crash response context"
+  },
+  {
     id: "crim-sec495",
     act: "Criminal Code Act (Southern States)",
     category: "Criminal Law",
