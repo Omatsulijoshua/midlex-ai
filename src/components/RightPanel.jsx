@@ -1,18 +1,26 @@
-import { BookOpen, Bookmark, Award, FileText } from 'lucide-react';
+import { BookOpen, Bookmark, Award, FileText, X } from 'lucide-react';
 
-export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark }) {
+export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark, mobileOpen, onCloseMobile }) {
   const hasSources = sources && sources.length > 0;
 
   return (
-    <aside className="sources-panel right-sources-panel" aria-label="Legal analysis and sources">
-      <div className="panel-header">
-        <BookOpen className="text-gold" size={20} style={{ color: 'var(--gold-primary)' }} />
-        <div>
-          <h2 className="panel-title">
-            Legal <span>Desk</span>
-          </h2>
-          <p className="panel-subtitle">Sources &amp; Rationale</p>
+    <aside className={`sources-panel right-sources-panel ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Legal analysis and sources">
+      <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <BookOpen className="text-gold" size={20} style={{ color: 'var(--gold-primary)' }} />
+          <div>
+            <h2 className="panel-title">
+              Legal <span>Desk</span>
+            </h2>
+            <p className="panel-subtitle">Sources &amp; Rationale</p>
+          </div>
         </div>
+        {mobileOpen && (
+          <button className="mobile-drawer-close" onClick={onCloseMobile} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+            <span>Close</span>
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       <div className="sources-scroll">

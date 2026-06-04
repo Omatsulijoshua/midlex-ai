@@ -4,7 +4,7 @@ import { Send, Trash2 } from 'lucide-react';
 export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerating, onSuggestionClick, currentUser }) {
   const [input, setInput] = useState('');
   const [thinkingText, setThinkingText] = useState('Searching legal database...');
-  const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -76,7 +76,12 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
 
   // Scroll to bottom when messages update
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages, isGenerating]);
 
   const handleSubmit = (e) => {
@@ -96,7 +101,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', overflow: 'hidden', position: 'relative' }}>
       {/* Scrollable messages container */}
-      <div className="chat-container">
+      <div className="chat-container" ref={chatContainerRef}>
         {messages.length === 0 ? (
           <div className="welcome-screen">
             <div className="welcome-logo">
@@ -180,7 +185,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        <div />
       </div>
 
       {/* Input panel at bottom */}

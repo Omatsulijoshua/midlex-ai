@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Trash2, History, Lock, Newspaper } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, History, Lock, Newspaper, X } from 'lucide-react';
 
 export function SavedChatsPanel({ 
   chats = [], 
@@ -10,12 +10,22 @@ export function SavedChatsPanel({
   onAdminClick,
   onArticlesClick,
   isSubscribed,
-  onToggleSubscribe
+  onToggleSubscribe,
+  mobileOpen,
+  onCloseMobile
 }) {
   return (
-    <aside className="history-panel" aria-label="Chat history">
+    <aside className={`history-panel ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Chat history">
       {/* Top action buttons */}
       <div className="history-header" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {mobileOpen && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', marginBottom: '-4px' }}>
+            <button className="mobile-drawer-close" onClick={onCloseMobile} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+              <span>Close</span>
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <button className="new-chat-btn" onClick={onCreateNewChat}>
           <Plus size={16} />
           <span>New Chat</span>

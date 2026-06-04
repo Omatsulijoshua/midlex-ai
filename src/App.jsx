@@ -7,7 +7,7 @@ import { RightPanel } from './components/RightPanel';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { ArticlesModal } from './components/ArticlesModal';
 import { searchLegalDatabase } from './utils/legalSearch';
-import { Scale, BookOpen } from 'lucide-react';
+import { Scale, BookOpen, Menu, FileText } from 'lucide-react';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -31,6 +31,8 @@ function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showArticles, setShowArticles] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(true);
+  const [showHistoryMobile, setShowHistoryMobile] = useState(false);
+  const [showSourcesMobile, setShowSourcesMobile] = useState(false);
 
   // Track page visits on mount
   useEffect(() => {
@@ -385,14 +387,25 @@ function App() {
       <SavedChatsPanel
         chats={chats}
         activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
-        onCreateNewChat={handleCreateNewChat}
+        onSelectChat={(chatId) => {
+          handleSelectChat(chatId);
+          setShowHistoryMobile(false);
+        }}
+        onCreateNewChat={() => {
+          handleCreateNewChat();
+          setShowHistoryMobile(false);
+        }}
         onDeleteChat={handleDeleteChat}
         currentUser={currentUser}
         onAdminClick={() => setShowAdmin(true)}
-        onArticlesClick={() => setShowArticles(true)}
+        onArticlesClick={() => {
+          setShowArticles(true);
+          setShowHistoryMobile(false);
+        }}
         isSubscribed={isSubscribed}
         onToggleSubscribe={handleToggleSubscribe}
+        mobileOpen={showHistoryMobile}
+        onCloseMobile={() => setShowHistoryMobile(false)}
       />
 
       {/* Center Panel: Main UI & Assistant Chat */}
@@ -400,11 +413,49 @@ function App() {
         {/* Topbar navigation */}
         <header className="app-topbar">
           <div className="brand">
+            <button 
+              className="mobile-menu-toggle-btn" 
+              onClick={() => setShowHistoryMobile(true)} 
+              aria-label="Open chat history"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px',
+                marginRight: '8px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(255,255,255,0.03)'
+              }}
+            >
+              <Menu size={20} />
+            </button>
             <Scale size={24} style={{ color: 'var(--green-accent)' }} />
             <h1 className="brand-name">Midlex <span>AI</span></h1>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {activeSources.length > 0 && (
+              <button 
+                className="mobile-sources-toggle-btn btn-secondary" 
+                onClick={() => setShowSourcesMobile(true)} 
+                aria-label="Open legal desk"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  fontSize: '0.78rem',
+                  height: '32px'
+                }}
+              >
+                <FileText size={14} />
+                <span>Desk ({activeSources.length})</span>
+              </button>
+            )}
             <button className="btn-secondary" onClick={() => setShowExplorer(true)}>
               <BookOpen size={16} />
               <span>Browse Laws</span>
@@ -437,7 +488,20 @@ function App() {
         reasoning={activeReasoning}
         bookmarks={bookmarks}
         onToggleBookmark={handleToggleBookmark}
+        mobileOpen={showSourcesMobile}
+        onCloseMobile={() => setShowSourcesMobile(false)}
       />
+
+      {/* Mobile drawer backdrop overlay */}
+      {(showHistoryMobile || showSourcesMobile) && (
+        <div 
+          className="mobile-drawer-backdrop" 
+          onClick={() => {
+            setShowHistoryMobile(false);
+            setShowSourcesMobile(false);
+          }}
+        />
+      )}
 
       {/* Document Explorer Modal */}
       {showExplorer && (
