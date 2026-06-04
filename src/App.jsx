@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { SavedChatsPanel } from './components/SavedChatsPanel';
 import { ChatAssistant } from './components/ChatAssistant';
 import { AuthManager } from './components/AuthManager';
@@ -22,20 +22,18 @@ function App() {
   const [activeReasoning, setActiveReasoning] = useState([]);
 
   // Bookmarks state
-  const [bookmarks, setBookmarks] = useState([]);
+  const [bookmarks, setBookmarks] = useState(() => {
+    const savedBookmarks = localStorage.getItem('midlex_bookmarks');
+    return savedBookmarks ? JSON.parse(savedBookmarks) : [];
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showArticles, setShowArticles] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(true);
 
-  // Load bookmarks & track page visits on mount
+  // Track page visits on mount
   useEffect(() => {
-    const savedBookmarks = localStorage.getItem('midlex_bookmarks');
-    if (savedBookmarks) {
-      setBookmarks(JSON.parse(savedBookmarks));
-    }
-
     const trackVisit = async () => {
       const isTracked = sessionStorage.getItem('midlex_session_tracked');
       if (!isTracked) {
@@ -366,6 +364,14 @@ function App() {
     // Save explorer action in chat history list
     updateChatsList(activeChatId, finalMessages, newSources, newReasoning, `Browse: ${section.section}`);
   };
+
+  if (showAdmin) {
+    return (
+      <AdminDashboardModal 
+        onClose={() => setShowAdmin(false)}
+      />
+    );
+  }
 
   return (
     <div className="app-container">

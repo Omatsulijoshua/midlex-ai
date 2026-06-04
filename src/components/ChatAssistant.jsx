@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Trash2, ArrowRight, BookOpen } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Trash2 } from 'lucide-react';
 
 export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerating, onSuggestionClick, currentUser }) {
   const [input, setInput] = useState('');
@@ -8,8 +8,10 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
 
   useEffect(() => {
     if (!isGenerating) {
-      setThinkingText('Searching legal database...');
-      return;
+      const timer = setTimeout(() => {
+        setThinkingText('Searching legal database...');
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const phases = [
@@ -20,7 +22,9 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
     ];
 
     let currentPhase = 0;
-    setThinkingText(phases[0]);
+    const initialTimer = setTimeout(() => {
+      setThinkingText(phases[0]);
+    }, 0);
 
     const interval = setInterval(() => {
       currentPhase++;
@@ -31,7 +35,10 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
       }
     }, 850);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [isGenerating]);
 
   const suggestions = [

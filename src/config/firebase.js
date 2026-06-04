@@ -17,13 +17,12 @@ const isConfigured = !!(
   firebaseConfig.apiKey !== 'your_firebase_api_key'
 );
 
-let app = null;
 let auth = null;
 let googleProvider = null;
 
 if (isConfigured) {
   try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
     googleProvider = new GoogleAuthProvider();
     console.log('🔥 Firebase Authentication initialized successfully.');

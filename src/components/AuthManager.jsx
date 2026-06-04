@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { LogIn, ShieldCheck } from 'lucide-react';
 import { auth, googleProvider, isConfigured } from '../config/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -35,7 +35,7 @@ export function AuthManager({ onUserChange, currentUser }) {
         onUserChange(JSON.parse(savedUser));
       }
     }
-  }, []);
+  }, [onUserChange]);
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);

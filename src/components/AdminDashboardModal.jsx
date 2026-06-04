@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, FileText, Calendar, Clock, X, Send, BookOpen } from 'lucide-react';
 
 export function AdminDashboardModal({ onClose }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem('midlex_admin_session') === 'authenticated';
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,14 +24,12 @@ export function AdminDashboardModal({ onClose }) {
   const [publishSuccess, setPublishSuccess] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // Check if admin is already logged in for this browser session
+  // Fetch stats if authenticated
   useEffect(() => {
-    const sessionToken = sessionStorage.getItem('midlex_admin_session');
-    if (sessionToken === 'authenticated') {
-      setIsAuthenticated(true);
+    if (isAuthenticated) {
       fetchStats();
     }
-  }, []);
+  }, [isAuthenticated]);
 
   async function fetchStats() {
     setIsSubmitting(true);
@@ -160,16 +160,20 @@ export function AdminDashboardModal({ onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="auth-modal admin-modal-container" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-page-container">
+      {/* Background Watermark Coat of Arms */}
+      <div className="watermark-bg"></div>
+
+      <div className="admin-page-content">
         {/* Close Button */}
-        <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
-          <X size={20} />
+        <button className="modal-close-btn" onClick={onClose} aria-label="Close modal" style={{ top: '24px', right: '24px' }}>
+          <X size={24} />
         </button>
 
         {!isAuthenticated ? (
           // LOGIN FORM VIEW
-          <div className="admin-login-view">
+          <div className="admin-page-centered-login">
+            <div className="admin-login-view">
             <div className="brand" style={{ justifyContent: 'center', marginBottom: '16px' }}>
               <ShieldCheck size={40} style={{ color: 'var(--gold-primary)' }} />
             </div>
@@ -249,7 +253,8 @@ export function AdminDashboardModal({ onClose }) {
               </button>
             </form>
           </div>
-        ) : (
+        </div>
+      ) : (
           // DASHBOARD PORTAL
           <div className="admin-dashboard-view">
             <header className="dashboard-header" style={{ marginBottom: '10px', paddingBottom: '10px' }}>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Search, BookOpen, FileText, ChevronRight, CornerDownRight } from 'lucide-react';
+import { useState } from 'react';
+import { X, Search, BookOpen, CornerDownRight } from 'lucide-react';
 import { legalData } from '../data/legalData';
 
 export function DocumentExplorer({ onClose, onSelectSection }) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Calendar, BookOpen, X, Scale, Shield, Vote, Home, Newspaper } from 'lucide-react';
 
 export function ArticlesModal({ onClose }) {

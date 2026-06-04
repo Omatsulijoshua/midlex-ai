@@ -1,3 +1,4 @@
+/* global process */
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -34,57 +35,6 @@ let analyticsData = {
 function seedAnalytics() {
   const now = Date.now();
   const oneDay = 24 * 60 * 60 * 1000;
-  
-  // Seed visits (around 195 visits spread over 30 days)
-  for (let i = 0; i < 195; i++) {
-    const daysAgo = Math.pow(Math.random(), 1.6) * 30; // Clustered more towards recent days
-    analyticsData.visits.push({
-      timestamp: now - (daysAgo * oneDay)
-    });
-  }
-
-  // Seed registered clients (8 mock bar advocates & clients)
-  const mockClients = [
-    { email: 'tobias.eze@gmail.com', daysAgo: 14, subscribed: true },
-    { email: 'funmi.alao@yahoo.com', daysAgo: 11, subscribed: false },
-    { email: 'chidi.okafor@outlook.com', daysAgo: 8, subscribed: true },
-    { email: 'amara.kanu@gmail.com', daysAgo: 6, subscribed: true },
-    { email: 'ibrahim.musa@lawyer.com', daysAgo: 4, subscribed: true },
-    { email: 'segun.odubanjo@midlex.com', daysAgo: 2.5, subscribed: false },
-    { email: 'chioma.nwachukwu@bar.ng', daysAgo: 1.2, subscribed: true },
-    { email: 'yusuf.bello@court.gov.ng', daysAgo: 0.1, subscribed: true }
-  ];
-
-  mockClients.forEach(c => {
-    analyticsData.registrations.push({
-      email: c.email,
-      timestamp: now - (c.daysAgo * oneDay),
-      subscribed: c.subscribed
-    });
-  });
-
-  // Seed questions asked historically with realistic legal search phrases
-  const seedQuestionsList = [
-    "what are my fundamental rights under police arrest?",
-    "can the governor revoke my C of O land ownership?",
-    "what is the definition and punishment for stealing?",
-    "how does the electoral act enforce BVAS usage in voting?",
-    "what is the land use act of 1978?",
-    "is police bail free in Nigeria?",
-    "how to recover a rental property from a tenant?"
-  ];
-
-  const frequencies = [28, 19, 14, 11, 8, 6, 3];
-  frequencies.forEach((freq, idx) => {
-    const qText = seedQuestionsList[idx];
-    for (let i = 0; i < freq; i++) {
-      const daysAgo = Math.random() * 30;
-      analyticsData.questions.push({
-        text: qText,
-        timestamp: now - (daysAgo * oneDay)
-      });
-    }
-  });
 
   // Seed articles (2 sample legal guides)
   analyticsData.articles.push({
@@ -263,15 +213,11 @@ app.post('/api/admin/publish-article', (req, res) => {
     saveAnalytics();
 
     // Determine recipient emails
-    let targetEmails = [];
-    if (audience === 'all') {
-      targetEmails = analyticsData.registrations.map(r => r.email);
-    } else {
-      // Filter for opt-in subscribed clients only
-      targetEmails = analyticsData.registrations
-        .filter(r => r.subscribed === true)
-        .map(r => r.email);
-    }
+    const targetEmails = audience === 'all'
+      ? analyticsData.registrations.map(r => r.email)
+      : analyticsData.registrations
+          .filter(r => r.subscribed === true)
+          .map(r => r.email);
 
     // Deduplicate emails
     const uniqueRecipients = [...new Set(targetEmails.map(e => e.toLowerCase()))];

@@ -1,4 +1,3 @@
-import React from 'react';
 import { BookOpen, Bookmark, Award, FileText } from 'lucide-react';
 
 export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark }) {
