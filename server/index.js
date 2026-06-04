@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { searchLegalDatabase } from './legalSearch.js';
+import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 
 // Load environmental variables
 dotenv.config();
@@ -339,6 +339,13 @@ app.post('/api/chat', async (req, res) => {
   // Step 1: Query local database to retrieve matching legal sections
   const localMatch = searchLegalDatabase(message);
 
+  if (!genAI) {
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY is not configured on the server.',
+      engine: 'gemini'
+    });
+  }
+
   // If local match is a simple greeting or default helper message without sources
   if (!localMatch.sources || localMatch.sources.length === 0) {
     // If Gemini is active, let Gemini reply directly in character
@@ -360,15 +367,21 @@ Please respond in character as a professional legal counsel:
         return res.json({
           answerText: generatedText,
           sources: [],
-          reasoning: []
+          reasoning: [],
+          engine: 'gemini'
         });
       } catch (err) {
-        console.error('❌ Gemini direct reply failed, falling back to offline reply:', err.message);
-        return res.json(localMatch);
+        console.error('❌ Gemini direct reply failed:', err.message);
+        return res.status(502).json({
+          error: err.message || 'Gemini direct reply failed.',
+          engine: 'gemini'
+        });
       }
     } else {
-      // Fallback directly to offline reply
-      return res.json(localMatch);
+      return res.status(503).json({
+        error: 'GEMINI_API_KEY is not configured on the server.',
+        engine: 'gemini'
+      });
     }
   }
 
@@ -413,18 +426,22 @@ Instructions:
       return res.json({
         answerText: explanation,
         sources: localMatch.sources,
-        reasoning: localMatch.reasoning
+        reasoning: localMatch.reasoning,
+        engine: 'gemini'
       });
 
     } catch (err) {
-      console.error('❌ Gemini RAG call failed. Falling back to offline match engine. Error:', err.message);
-      // Fallback to local match engine text response
-      return res.json(localMatch);
+      console.error('❌ Gemini RAG call failed:', err.message);
+      return res.status(502).json({
+        error: err.message || 'Gemini RAG call failed.',
+        engine: 'gemini'
+      });
     }
   } else {
-    // Return offline response if Gemini is not configured
-    console.log('🔌 No Gemini API configured. Returning local offline match results.');
-    return res.json(localMatch);
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY is not configured on the server.',
+      engine: 'gemini'
+    });
   }
 });
 

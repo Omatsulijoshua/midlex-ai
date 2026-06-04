@@ -11,6 +11,19 @@ export function getApiUrl() {
   return configuredUrl;
 }
 
+export function getApiEndpoint(path, options = {}) {
+  const apiUrl = getApiUrl();
+  if (apiUrl) {
+    return `${apiUrl}${path}`;
+  }
+
+  if (options.sameOriginInProduction && import.meta.env.PROD) {
+    return path;
+  }
+
+  return path;
+}
+
 export async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

@@ -1,4 +1,4 @@
-import { legalData } from '../data/legalData';
+import { legalData } from '../data/legalData.js';
 
 const STOPWORDS = new Set([
   'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'arent', 

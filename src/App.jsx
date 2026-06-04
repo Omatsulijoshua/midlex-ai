@@ -6,8 +6,7 @@ import { DocumentExplorer } from './components/DocumentExplorer';
 import { RightPanel } from './components/RightPanel';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { ArticlesModal } from './components/ArticlesModal';
-import { searchLegalDatabase } from './utils/legalSearch';
-import { fetchWithTimeout, getApiUrl } from './utils/api';
+import { fetchWithTimeout, getApiEndpoint, getApiUrl } from './utils/api';
 import { Scale, BookOpen, Menu, FileText } from 'lucide-react';
 
 const getChatsStorageKey = (user) => {
@@ -240,13 +239,10 @@ function App() {
     const startTime = Date.now();
 
     try {
-      const API_URL = getApiUrl();
-      if (!API_URL) {
-        throw new Error('No production API URL configured');
-      }
+      const chatApiUrl = getApiEndpoint('/api/chat', { sameOriginInProduction: true });
 
       // Attempt backend API fetch
-      const response = await fetchWithTimeout(`${API_URL}/api/chat`, {
+      const response = await fetchWithTimeout(chatApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -255,7 +251,8 @@ function App() {
       }, 15000);
 
       if (!response.ok) {
-        throw new Error('API server returned error status');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Gemini API server returned an error.');
       }
 
       const data = await response.json();
@@ -285,27 +282,22 @@ function App() {
       // Save to chat list
       updateChatsList(activeChatId, finalMessages, newSources, newReasoning, text);
     } catch (err) {
-      console.warn('⚠️ Midlex Backend API unavailable, falling back to local search engine:', err.message);
-      
-      // Fallback local engine search
-      const searchResults = searchLegalDatabase(text);
-
-      // Enforce 3000ms delay to display thinking animation before returning
+      console.warn('Gemini API unavailable:', err.message);
       const elapsed = Date.now() - startTime;
       const remainingTime = Math.max(0, 3000 - elapsed);
 
       setTimeout(() => {
         const assistantMessage = { 
           role: 'assistant', 
-          content: searchResults.answerText,
+          content: `**Gemini API unavailable:** ${err.message}\n\nPlease make sure the server has a valid **GEMINI_API_KEY** configured. I did not use the offline fallback for this answer.`,
           query: text
         };
         
         const finalMessages = [...updatedMessages, assistantMessage];
         setMessages(finalMessages);
         
-        const newSources = searchResults.sources || [];
-        const newReasoning = searchResults.reasoning || [];
+        const newSources = [];
+        const newReasoning = [];
         setActiveSources(newSources);
         setActiveReasoning(newReasoning);
         setIsGenerating(false);
