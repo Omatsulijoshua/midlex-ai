@@ -1,4 +1,4 @@
-/* global process */
+/* global Buffer, process */
 import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -6,6 +6,13 @@ const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash';
 
 function parseBody(req) {
   if (!req.body) return {};
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf8'));
+    } catch {
+      return {};
+    }
+  }
   if (typeof req.body === 'string') {
     try {
       return JSON.parse(req.body);
