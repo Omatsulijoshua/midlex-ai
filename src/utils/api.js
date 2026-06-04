@@ -1,13 +1,15 @@
+const DEFAULT_PRODUCTION_API_URL = 'https://midlex-ai-backend.onrender.com';
+
 export function getApiUrl() {
   const configuredUrl = (
     import.meta.env.VITE_PRODUCTION_API_URL ||
     import.meta.env.VITE_API_URL ||
-    (import.meta.env.PROD ? '' : 'http://localhost:5000')
+    (import.meta.env.PROD ? DEFAULT_PRODUCTION_API_URL : 'http://localhost:5000')
   ).trim().replace(/\/+$/, '');
   const isLocalUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(configuredUrl);
 
   if (import.meta.env.PROD && isLocalUrl) {
-    return '';
+    return DEFAULT_PRODUCTION_API_URL;
   }
 
   return configuredUrl;
