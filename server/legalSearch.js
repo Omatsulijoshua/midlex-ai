@@ -176,11 +176,11 @@ function hasAny(tokens, lookupSet) {
 }
 
 function withConclusion(text, conclusion) {
-  if (/(\*\*)?conclusion(\*\*)?:?/i.test(text)) {
+  if (/(\*\*)?(in\s+)?conclusion(\*\*)?:?/i.test(text)) {
     return text;
   }
 
-  return `${text.trim()}\n\n**Conclusion:** ${conclusion}`;
+  return `${text.trim()}\n\n**In conclusion:** ${conclusion}`;
 }
 
 export function searchLegalDatabase(query) {

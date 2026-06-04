@@ -152,6 +152,12 @@ async function generateGeminiText(prompt) {
   throw lastError;
 }
 
+const jurisdictionRule = `Jurisdiction rule:
+- First check whether the user mentioned a Nigerian state, Abuja/FCT, or a local authority.
+- If a state or FCT is mentioned, answer under that jurisdiction's law where it is relevant, and say when a federal law also applies nationwide.
+- If no state is mentioned and the answer can differ by state, say clearly that state law may differ, give the general Nigerian/federal position, mention any relevant state-specific examples from the retrieved materials, and ask the user to provide the state for a more precise answer.
+- If several states have different rules for the same issue and you know the difference from the retrieved materials or reliable general knowledge, compare them briefly. Do not invent state laws, penalties, deadlines, or section numbers.`;
+
 // Track page visit (Pinged by client session storage)
 app.post('/api/analytics/visit', (req, res) => {
   analyticsData.visits.push({
@@ -359,8 +365,10 @@ Please respond in character as a professional legal counsel:
 1. If the message is a general greeting or introduction, introduce yourself and explain what you can do (e.g., answering questions on the Constitution, Land Use Act, Criminal Code, and Electoral Act 2022).
 2. If the user is asking a specific legal question (e.g., about a car accident, vehicle towing, contracts, family law, etc.), please answer their question directly, thoroughly, and professionally using your general knowledge of the Nigerian Legal System (e.g., relevant tort principles, state traffic laws, etc.).
 3. Keep the tone helpful, professional, and authoritative.
-4. Always end with a short **Conclusion:** paragraph that directly answers the user's question and gives the safest next step.
-5. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+4. Apply this rule in every answer:
+${jurisdictionRule}
+5. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
+6. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
         const generatedText = await generateGeminiText(systemPrompt);
         
@@ -414,10 +422,12 @@ Instructions:
 2. Quote or reference specific sections (e.g. **Section 34 of the Constitution** or **Section 1 of the Land Use Act**) directly to back up your points.
 3. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
 4. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
-5. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system.
-6. Do not invent procedural dates, waiting periods, filing deadlines, penalties, or court requirements unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
-7. Always end with a short **Conclusion:** paragraph that directly answers the user's question and gives the safest next step.
-8. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+5. Apply this rule in every answer:
+${jurisdictionRule}
+6. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system.
+7. Do not invent procedural dates, waiting periods, filing deadlines, penalties, or court requirements unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
+8. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
+9. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
       const explanation = await generateGeminiText(systemPrompt);
 
