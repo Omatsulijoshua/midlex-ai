@@ -25,6 +25,144 @@ const STOPWORDS = new Set([
   'provisions', 'code', 'codes', 'constitute', 'constitutes', 'constitution', 'constitutions'
 ]);
 
+STOPWORDS.delete('constitution');
+STOPWORDS.delete('constitutions');
+
+const SPELLING_CORRECTIONS = new Map([
+  ['allowto', 'allowed to'],
+  ['alowto', 'allowed to'],
+  ['allowd', 'allowed'],
+  ['alowed', 'allowed'],
+  ['remary', 'remarry'],
+  ['remarryy', 'remarry'],
+  ['marraige', 'marriage'],
+  ['mariage', 'marriage'],
+  ['divorse', 'divorce'],
+  ['devorce', 'divorce'],
+  ['constitition', 'constitution'],
+  ['constition', 'constitution'],
+  ['nigeri', 'nigeria'],
+  ['cort', 'court'],
+  ['ad', 'and'],
+  ['neigbour', 'neighbour'],
+  ['neigbor', 'neighbor'],
+  ['neibor', 'neighbor'],
+  ['neighbour', 'neighbor'],
+  ['chiken', 'chicken'],
+  ['chickn', 'chicken'],
+  ['dogg', 'dog'],
+  ['tolled', 'towed'],
+  ['tolded', 'towed'],
+  ['towd', 'towed'],
+  ['toed', 'towed'],
+  ['impunded', 'impounded'],
+  ['spouce', 'spouse'],
+  ['housband', 'husband'],
+  ['husban', 'husband'],
+  ['wif', 'wife'],
+  ['rigth', 'right'],
+  ['rigths', 'rights'],
+  ['arest', 'arrest'],
+  ['arrrest', 'arrest'],
+  ['ocupancy', 'occupancy']
+]);
+
+const ANIMAL_TOKENS = new Set([
+  'animal', 'animals', 'dog', 'dogs', 'pet', 'pets', 'chicken', 'chickens', 'goat', 'goats',
+  'cow', 'cows', 'livestock', 'cat', 'cats', 'bird', 'birds', 'cruelty', 'poison', 'poisoned'
+]);
+
+const HUMAN_HOMICIDE_TOKENS = new Set([
+  'human', 'person', 'people', 'man', 'woman', 'child', 'murder', 'manslaughter', 'homicide'
+]);
+
+const ROAD_TRAFFIC_TOKENS = new Set([
+  'car', 'cars', 'vehicle', 'vehicles', 'towed', 'tow', 'towing', 'tolled', 'impound',
+  'impounded', 'parking', 'parked', 'road', 'highway', 'traffic', 'lastma', 'vio',
+  'breakdown', 'obstruction', 'abandoned', 'ticket', 'demurrage'
+]);
+
+function normalizeQueryText(query) {
+  return query
+    .toLowerCase()
+    .replace(/c\s*of\s*o|c-of-o|c\.of\.o/g, 'certificate of occupancy')
+    .replace(/\b[\w']+\b/g, word => SPELLING_CORRECTIONS.get(word) || word);
+}
+
+function stemToken(token) {
+  if (token.endsWith('ing')) {
+    return token.slice(0, -3);
+  }
+  if (token.endsWith('ed') && !token.endsWith('eed')) {
+    return token.slice(0, -2);
+  }
+  if (token.endsWith('s') && !token.endsWith('ss')) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, idx) => idx);
+  const current = new Array(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[b.length];
+}
+
+function tokenize(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length > 2 || /^\d+$/.test(token));
+}
+
+function fuzzyMatches(token, item) {
+  if (token.length < 4) return false;
+
+  const searchableText = [
+    item.category,
+    item.act,
+    item.title,
+    item.section,
+    item.content,
+    item.reasoning,
+    ...(item.keywords || [])
+  ].join(' ');
+
+  const candidates = new Set(tokenize(searchableText).map(stemToken));
+  const maxDistance = token.length >= 7 ? 2 : 1;
+  return [...candidates].some(candidate => {
+    if (Math.abs(candidate.length - token.length) > maxDistance) return false;
+    return levenshtein(token, candidate) <= maxDistance;
+  });
+}
+
+function hasAny(tokens, lookupSet) {
+  return tokens.some(token => lookupSet.has(token));
+}
+
 export function searchLegalDatabase(query) {
   if (!query || query.trim() === '') {
     return {
@@ -34,9 +172,7 @@ export function searchLegalDatabase(query) {
     };
   }
 
-  // Pre-process and normalize common abbreviations before tokenizing
-  let normalizedQuery = query.toLowerCase();
-  normalizedQuery = normalizedQuery.replace(/c\s*of\s*o|c-of-o|c\.of\.o/g, 'certificate of occupancy');
+  const normalizedQuery = normalizeQueryText(query);
 
   const tokens = normalizedQuery
     .replace(/[^\w\s]/g, ' ')
@@ -63,25 +199,18 @@ export function searchLegalDatabase(query) {
 
   for (const item of legalData) {
     let score = 0;
-    const matchedTokens = [];
+    const matchedTokens = new Set();
 
     for (const token of tokens) {
       let tokenMatched = false;
 
-      // Simple suffix stripping (stemming) to handle pluralization and verb tenses
-      let stem = token;
-      if (token.endsWith('ing')) {
-        stem = token.slice(0, -3);
-      } else if (token.endsWith('ed') && !token.endsWith('eed')) {
-        stem = token.slice(0, -2);
-      } else if (token.endsWith('s') && !token.endsWith('ss')) {
-        stem = token.slice(0, -1);
-      }
+      const stem = stemToken(token);
 
       // Smart boundary regex:
       // If token stem is 3 letters (e.g. 'car', 'law', 'act'), require exact whole-word or its plural (e.g. \bcars?\b)
       // If token stem is 4+ letters (e.g. 'arrest', 'steal'), use word prefix (e.g. \barrest) to match arrested, stealing, etc.
-      const regexStr = stem.length <= 3 ? `\\b${stem}s?\\b` : `\\b${stem}`;
+      const escapedStem = escapeRegex(stem);
+      const regexStr = stem.length <= 3 ? `\\b${escapedStem}s?\\b` : `\\b${escapedStem}`;
       const regex = new RegExp(regexStr, 'i');
 
       if (regex.test(item.category)) {
@@ -122,17 +251,57 @@ export function searchLegalDatabase(query) {
         tokenMatched = true;
       }
 
+      if (!tokenMatched && fuzzyMatches(stem, item)) {
+        score += 3;
+        tokenMatched = true;
+      }
+
       if (tokenMatched) {
-        matchedTokens.push(token);
+        matchedTokens.add(token);
+      }
+    }
+
+    if (tokens.includes('remarry') || tokens.includes('remarriage')) {
+      if (item.id === 'mca-sec33') score += 20;
+      if (item.id === 'mca-sec58') score += 12;
+      if (item.id === 'mca-sec3') score += 8;
+    }
+
+    if (tokens.includes('constitution') && item.category === 'Constitution') {
+      score += 20;
+    }
+
+    const hasAnimalIssue = hasAny(tokens, ANIMAL_TOKENS);
+    const hasHumanHomicideIssue = hasAny(tokens, HUMAN_HOMICIDE_TOKENS);
+
+    if (hasAnimalIssue) {
+      if (item.part === 'Cruelty to animals') {
+        score += item.id === 'crim-sec495' ? 35 : 18;
+      }
+
+      if (item.part === 'Homicide' && !hasHumanHomicideIssue) {
+        score -= 40;
+      }
+    }
+
+    const hasRoadTrafficIssue = hasAny(tokens, ROAD_TRAFFIC_TOKENS);
+
+    if (hasRoadTrafficIssue) {
+      if (item.category === 'Road Traffic Law') {
+        score += item.id === 'lagos-tms-enforcement-impound' ? 25 : 30;
+      }
+
+      if (item.act.toLowerCase().includes('aviation')) {
+        score -= 50;
       }
     }
 
     if (score > 0) {
       // Enforce a minimum query token coverage threshold of 35%
       // This prevents single-word accidental matches on long questions
-      const coverage = matchedTokens.length / tokens.length;
+      const coverage = matchedTokens.size / tokens.length;
       if (coverage >= 0.35) {
-        results.push({ item, score, matchedTokens });
+        results.push({ item, score, matchedTokens: [...matchedTokens] });
       }
     }
   }
@@ -141,7 +310,7 @@ export function searchLegalDatabase(query) {
 
   if (results.length === 0) {
     return {
-      answerText: `I couldn't find any direct matches in our database for "${query}". \n\nHowever, I can assist you with questions concerning:\n• **Fundamental Rights** (e.g., freedom of speech, right to life, bail, police arrests)\n• **Land Ownership & Leases** (e.g., C of O, Governor's consent, land revocation)\n• **Criminal Offenses** (e.g., definition and penalties for theft, murder)\n• **Elections** (e.g., BVAS, result transmission, electoral offences under the Electoral Act 2022).`,
+      answerText: `I couldn't find a direct match for "${query}" yet.\n\nI can help with Nigerian legal questions on:\n- **Fundamental Rights** (speech, liberty, fair hearing, police arrests)\n- **Land Ownership & Leases** (C of O, Governor's consent, revocation)\n- **Criminal Offences** (theft, murder, penalties)\n- **Animal Cruelty** (dogs, pets, livestock, poisoning or retaliation)\n- **Family Law** (marriage, divorce, remarriage, custody and maintenance)\n- **Elections** (BVAS, result transmission, Electoral Act offences).`,
       sources: [],
       reasoning: []
     };
@@ -170,7 +339,10 @@ export function searchLegalDatabase(query) {
     content: m.item.content,
     chapter: m.item.chapter,
     part: m.item.part,
-    category: m.item.category
+    category: m.item.category,
+    sourceUrl: m.item.sourceUrl,
+    sourcePage: m.item.sourcePage,
+    reasoning: m.item.reasoning
   }));
 
   const reasoning = topMatches.map(m => ({

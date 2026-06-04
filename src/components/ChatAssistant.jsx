@@ -58,6 +58,16 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
       query: "what is the definition and punishment for stealing?"
     },
     {
+      headline: "Vehicle Towing",
+      body: "Can my car be towed for obstructing traffic?",
+      query: "can my car be towed for obstructing traffic?"
+    },
+    {
+      headline: "Family Law",
+      body: "Am I allowed to remarry after divorce?",
+      query: "am I allowed to remarry after divorce in Nigeria?"
+    },
+    {
       headline: "Electoral Law",
       body: "How does the Electoral Act 2022 enforce BVAS usage?",
       query: "how does the electoral act enforce BVAS usage in voting?"
@@ -108,7 +118,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
               Midlex AI: <span>Nigerian Law Assistant</span>
             </h1>
             <p className="welcome-desc">
-              Ask legal questions regarding the Constitution of Nigeria, Land Use Act, Electoral Act, and Criminal Codes. Receive instant citations and legal rationale in real time.
+              Ask legal questions regarding the Constitution of Nigeria, Land Use Act, road traffic rules, Matrimonial Causes Act, Electoral Act, and Criminal Codes. Receive instant citations and legal rationale in real time.
             </p>
 
             <div className="suggestion-grid">

@@ -113,6 +113,8 @@ app.get('/', (req, res) => {
 
 // Initialize Google Gemini API
 const apiKey = process.env.GEMINI_API_KEY;
+const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const geminiFallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
 let genAI = null;
 
 if (apiKey && apiKey.trim() !== '') {
@@ -125,6 +127,29 @@ if (apiKey && apiKey.trim() !== '') {
 } else {
   console.warn('⚠️ WARNING: GEMINI_API_KEY is not defined.');
   console.warn('⚠️ Server will operate in Offline Fallback Mode, returning pre-authored database answers.');
+}
+
+async function generateGeminiText(prompt) {
+  const modelNames = [...new Set([geminiModel, geminiFallbackModel])];
+  let lastError = null;
+
+  for (const modelName of modelNames) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (err) {
+      lastError = err;
+      const message = err?.message || '';
+      const canRetry = /404|not found|not supported/i.test(message);
+      if (!canRetry) {
+        throw err;
+      }
+      console.warn(`⚠️ Gemini model "${modelName}" unavailable. Trying fallback model if configured...`);
+    }
+  }
+
+  throw lastError;
 }
 
 // Track page visit (Pinged by client session storage)
@@ -320,8 +345,6 @@ app.post('/api/chat', async (req, res) => {
     if (genAI) {
       try {
         console.log('🤖 Querying Gemini for direct general greeting/helper reply...');
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        
         const systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
 The user sent a message or asked a question: "${message}".
 
@@ -331,8 +354,7 @@ Please respond in character as a professional legal counsel:
 3. Keep the tone helpful, professional, and authoritative.
 4. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
-        const result = await model.generateContent(systemPrompt);
-        const generatedText = result.response.text();
+        const generatedText = await generateGeminiText(systemPrompt);
         
         return res.json({
           answerText: generatedText,
@@ -353,14 +375,13 @@ Please respond in character as a professional legal counsel:
   if (genAI) {
     try {
       console.log(`📚 Found ${localMatch.sources.length} matching legal provision(s). Initiating Gemini RAG flow...`);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
       // Grounding context construction
       const contextText = localMatch.sources.map((s, idx) => {
         return `[SOURCE ${idx + 1}]: ${s.act} - ${s.section} (Titled: "${s.title}")
 Chapter/Part: ${s.chapter || ""} / ${s.part || ""}
 Official Text: "${s.content}"
-Standard Rationale: ${s.reasoning || ""}`;
+Standard Rationale: ${s.reasoning || ""}
+Reference: ${s.sourcePage || "Registry source"}${s.sourceUrl ? ` - ${s.sourceUrl}` : ""}`;
       }).join('\n\n');
 
       const systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
@@ -380,10 +401,10 @@ Instructions:
 3. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
 4. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
 5. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system.
-6. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+6. Do not invent procedural dates, waiting periods, filing deadlines, penalties, or court requirements unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
+7. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
-      const result = await model.generateContent(systemPrompt);
-      const explanation = result.response.text();
+      const explanation = await generateGeminiText(systemPrompt);
 
       console.log('✅ Gemini RAG explanation generated successfully.');
 

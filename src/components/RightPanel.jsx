@@ -51,6 +51,9 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
                 <li>1999 Constitution (Fundamental Rights)</li>
                 <li>Land Use Act of 1978</li>
                 <li>Criminal Code Act</li>
+                <li>Road Traffic &amp; Vehicle Towing</li>
+                <li>Animal Cruelty (Criminal Code)</li>
+                <li>Matrimonial Causes Act</li>
                 <li>Electoral Act 2022</li>
               </ul>
             </div>
@@ -88,7 +91,8 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
                     {source.section}
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    {source.act} • {source.chapter}
+                    {source.act} - {source.chapter}
+                    {source.sourcePage ? ` - ${source.sourcePage}` : ''}
                   </div>
                   
                   <div className="source-body">
@@ -105,6 +109,17 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
                         {reasonItem.rationale}
                       </p>
                     </div>
+                  )}
+
+                  {source.sourceUrl && (
+                    <a
+                      href={source.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-block', marginTop: '10px', color: 'var(--gold-primary)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none' }}
+                    >
+                      Open public source {source.sourcePage ? `(${source.sourcePage})` : ''}
+                    </a>
                   )}
                 </div>
               );

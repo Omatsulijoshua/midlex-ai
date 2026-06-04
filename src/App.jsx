@@ -337,7 +337,10 @@ function App() {
       content: section.content,
       chapter: section.chapter,
       part: section.part,
-      category: section.category
+      category: section.category,
+      sourceUrl: section.sourceUrl,
+      sourcePage: section.sourcePage,
+      reasoning: section.reasoning
     };
 
     const reasoningObj = {

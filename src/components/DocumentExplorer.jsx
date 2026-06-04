@@ -7,12 +7,14 @@ export function DocumentExplorer({ onClose, onSelectSection }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [activeSectionId, setActiveSectionId] = useState(legalData[0]?.id);
 
-  const categories = ['All', 'Constitution', 'Property & Land Law', 'Criminal Law', 'Electoral & Political Law'];
+  const categories = ['All', 'Constitution', 'Property & Land Law', 'Criminal Law', 'Road Traffic Law', 'Family Law', 'Electoral & Political Law'];
 
   const filteredData = legalData.filter(item => {
     const matchesSearch = 
       item.section.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.act.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.content.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
@@ -153,9 +155,10 @@ export function DocumentExplorer({ onClose, onSelectSection }) {
                     {activeSection.section}: {activeSection.title}
                   </h2>
                   
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    Part of the <strong>{activeSection.act}</strong> ({activeSection.chapter} / {activeSection.part})
-                  </p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Part of the <strong>{activeSection.act}</strong> ({activeSection.chapter} / {activeSection.part})
+                  {activeSection.sourcePage ? ` - ${activeSection.sourcePage}` : ''}
+                </p>
                 </div>
 
                 <div style={{
@@ -180,6 +183,16 @@ export function DocumentExplorer({ onClose, onSelectSection }) {
                   <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
                     {activeSection.reasoning}
                   </p>
+                  {activeSection.sourceUrl && (
+                    <a
+                      href={activeSection.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-block', marginTop: '10px', color: 'var(--gold-primary)', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      Open public source {activeSection.sourcePage ? `(${activeSection.sourcePage})` : ''}
+                    </a>
+                  )}
                 </div>
 
                 <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: '12px' }}>
