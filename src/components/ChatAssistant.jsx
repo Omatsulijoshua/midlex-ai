@@ -76,7 +76,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
 
   // Scroll to bottom when messages update
   useEffect(() => {
-    if (chatContainerRef.current) {
+    if (messages.length > 0 && chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
         top: chatContainerRef.current.scrollHeight,
         behavior: 'smooth'
