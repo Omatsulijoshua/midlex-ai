@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { LeftPanel } from './components/LeftPanel';
+import { SavedChatsPanel } from './components/SavedChatsPanel';
 import { ChatAssistant } from './components/ChatAssistant';
 import { AuthManager } from './components/AuthManager';
 import { DocumentExplorer } from './components/DocumentExplorer';
+import { RightPanel } from './components/RightPanel';
 import { searchLegalDatabase } from './utils/legalSearch';
-import { Scale, BookOpen, BookmarkCheck } from 'lucide-react';
+import { Scale, BookOpen } from 'lucide-react';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
+  
+  // Multi-chat states
+  const [chats, setChats] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
+
+  // Active chat content states
   const [messages, setMessages] = useState([]);
   const [activeSources, setActiveSources] = useState([]);
   const [activeReasoning, setActiveReasoning] = useState([]);
+
+  // Bookmarks state
   const [bookmarks, setBookmarks] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
@@ -36,37 +45,128 @@ function App() {
     localStorage.setItem('midlex_bookmarks', JSON.stringify(updatedBookmarks));
   };
 
+  // Helper: Get localStorage key for chats depending on current user
+  const getChatsStorageKey = (user) => {
+    return user ? `midlex_user_chats_${user.id}` : 'midlex_guest_chats';
+  };
+
+  // Helper: Create a fresh empty conversation session in memory
+  const handleCreateNewChat = () => {
+    const newId = `chat_${Date.now()}`;
+    setActiveChatId(newId);
+    setMessages([]);
+    setActiveSources([]);
+    setActiveReasoning([]);
+  };
+
+  // Helper: Select and load an existing chat
+  const handleSelectChat = (chatId) => {
+    const selected = chats.find(c => c.id === chatId);
+    if (selected) {
+      setActiveChatId(chatId);
+      setMessages(selected.messages || []);
+      setActiveSources(selected.sources || []);
+      setActiveReasoning(selected.reasoning || []);
+    }
+  };
+
+  // Helper: Delete a chat conversation
+  const handleDeleteChat = (chatId) => {
+    const updatedChats = chats.filter(c => c.id !== chatId);
+    setChats(updatedChats);
+    
+    const key = getChatsStorageKey(currentUser);
+    localStorage.setItem(key, JSON.stringify(updatedChats));
+
+    // If the active chat was deleted, open a new blank chat session
+    if (activeChatId === chatId) {
+      handleCreateNewChat();
+    }
+  };
+
+  // Helper: Update state & localStorage when a message is sent or generated
+  const updateChatsList = (chatId, finalMessages, sources, reasoning, initialText) => {
+    const exists = chats.some(c => c.id === chatId);
+    let updatedChats;
+
+    if (exists) {
+      updatedChats = chats.map(c => {
+        if (c.id === chatId) {
+          return {
+            ...c,
+            messages: finalMessages,
+            sources: sources,
+            reasoning: reasoning
+          };
+        }
+        return c;
+      });
+    } else {
+      // First message in this session: create and prepend the chat in the list
+      const titleText = initialText.length > 36 ? initialText.substring(0, 36) + '...' : initialText;
+      const newChat = {
+        id: chatId,
+        title: titleText,
+        createdAt: Date.now(),
+        messages: finalMessages,
+        sources: sources,
+        reasoning: reasoning
+      };
+      updatedChats = [newChat, ...chats];
+    }
+
+    setChats(updatedChats);
+    const key = getChatsStorageKey(currentUser);
+    localStorage.setItem(key, JSON.stringify(updatedChats));
+  };
+
   // Handle User Change (login/logout)
   const handleUserChange = (user) => {
     setCurrentUser(user);
-    if (user) {
-      // Load user specific chat history
-      const savedChats = localStorage.getItem(`midlex_chats_${user.id}`);
-      if (savedChats) {
-        const parsedChats = JSON.parse(savedChats);
-        setMessages(parsedChats);
-        
-        // Restore sources/reasoning from the last assistant message if possible
-        const assistantMsgs = parsedChats.filter(m => m.role === 'assistant');
-        if (assistantMsgs.length > 0) {
-          const lastMsg = assistantMsgs[assistantMsgs.length - 1];
-          if (lastMsg.query) {
-            const results = searchLegalDatabase(lastMsg.query);
-            setActiveSources(results.sources);
-            setActiveReasoning(results.reasoning);
+    
+    // Determine the key for the incoming user status
+    const key = getChatsStorageKey(user);
+    const savedChats = localStorage.getItem(key);
+    
+    let loadedChats = [];
+
+    if (savedChats) {
+      loadedChats = JSON.parse(savedChats);
+    } else if (user) {
+      // Data Migration check: see if they have old single-chat data we can import
+      const oldSingleChat = localStorage.getItem(`midlex_chats_${user.id}`);
+      if (oldSingleChat) {
+        try {
+          const parsedMsgs = JSON.parse(oldSingleChat);
+          if (parsedMsgs && parsedMsgs.length > 0) {
+            const firstUserMsg = parsedMsgs.find(m => m.role === 'user');
+            const initialTitle = firstUserMsg ? firstUserMsg.content : 'Migrated Conversation';
+            const migratedChat = {
+              id: `chat_migrated_${Date.now()}`,
+              title: initialTitle.length > 36 ? initialTitle.substring(0, 36) + '...' : initialTitle,
+              createdAt: Date.now(),
+              messages: parsedMsgs,
+              sources: [],
+              reasoning: []
+            };
+            loadedChats = [migratedChat];
+            localStorage.setItem(key, JSON.stringify(loadedChats));
+            localStorage.removeItem(`midlex_chats_${user.id}`); // Clean up old single chat key
           }
+        } catch (err) {
+          console.error('Failed to migrate old single-chat data:', err);
         }
-      } else {
-        setMessages([]);
-        setActiveSources([]);
-        setActiveReasoning([]);
       }
-    } else {
-      // Clear messages on logout
-      setMessages([]);
-      setActiveSources([]);
-      setActiveReasoning([]);
     }
+
+    setChats(loadedChats);
+
+    // requirement: Automatically open a new blank chat session when user logs in/opens the site
+    const newId = `chat_${Date.now()}`;
+    setActiveChatId(newId);
+    setMessages([]);
+    setActiveSources([]);
+    setActiveReasoning([]);
   };
 
   // Send Message Logic
@@ -102,15 +202,15 @@ function App() {
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
       
-      // Update Left Panel sources and reasoning
-      setActiveSources(data.sources || []);
-      setActiveReasoning(data.reasoning || []);
+      // Update Right Panel sources and reasoning
+      const newSources = data.sources || [];
+      const newReasoning = data.reasoning || [];
+      setActiveSources(newSources);
+      setActiveReasoning(newReasoning);
       setIsGenerating(false);
 
-      // Save to localStorage if logged in
-      if (currentUser) {
-        localStorage.setItem(`midlex_chats_${currentUser.id}`, JSON.stringify(finalMessages));
-      }
+      // Save to chat list
+      updateChatsList(activeChatId, finalMessages, newSources, newReasoning, text);
     } catch (err) {
       console.warn('⚠️ Midlex Backend API unavailable, falling back to local search engine:', err.message);
       
@@ -127,13 +227,15 @@ function App() {
         
         const finalMessages = [...updatedMessages, assistantMessage];
         setMessages(finalMessages);
-        setActiveSources(searchResults.sources);
-        setActiveReasoning(searchResults.reasoning);
+        
+        const newSources = searchResults.sources || [];
+        const newReasoning = searchResults.reasoning || [];
+        setActiveSources(newSources);
+        setActiveReasoning(newReasoning);
         setIsGenerating(false);
 
-        if (currentUser) {
-          localStorage.setItem(`midlex_chats_${currentUser.id}`, JSON.stringify(finalMessages));
-        }
+        // Save to chat list
+        updateChatsList(activeChatId, finalMessages, newSources, newReasoning, text);
       }, 800);
     }
   };
@@ -143,9 +245,16 @@ function App() {
     setMessages([]);
     setActiveSources([]);
     setActiveReasoning([]);
-    if (currentUser) {
-      localStorage.removeItem(`midlex_chats_${currentUser.id}`);
-    }
+    
+    // Remove the active chat from list if it exists
+    const updatedChats = chats.filter(c => c.id !== activeChatId);
+    setChats(updatedChats);
+
+    const key = getChatsStorageKey(currentUser);
+    localStorage.setItem(key, JSON.stringify(updatedChats));
+    
+    // Initialize a new empty session
+    handleCreateNewChat();
   };
 
   // Suggestion card clicked
@@ -155,7 +264,7 @@ function App() {
 
   // Direct Explorer citation injection
   const handleSelectExplorerSection = (section) => {
-    // Format the sources and reasoning arrays for Left Panel
+    // Format the sources and reasoning arrays for Right Panel
     const sourceObj = {
       id: section.id,
       section: section.section,
@@ -173,21 +282,23 @@ function App() {
       rationale: section.reasoning
     };
 
-    setActiveSources([sourceObj]);
-    setActiveReasoning([reasoningObj]);
+    const newSources = [sourceObj];
+    const newReasoning = [reasoningObj];
+
+    setActiveSources(newSources);
+    setActiveReasoning(newReasoning);
 
     // Push system log in chat
     const systemMsg = {
       role: 'assistant',
-      content: `I have pre-loaded **${section.section} (${section.title})** of the **${section.act}** onto your Left Analysis Desk. You can read the text and its application rationale directly. What questions do you have regarding this provision?`
+      content: `I have pre-loaded **${section.section} (${section.title})** of the **${section.act}** onto your Legal Desk. You can read the text and its application rationale directly. What questions do you have regarding this provision?`
     };
 
     const finalMessages = [...messages, systemMsg];
     setMessages(finalMessages);
 
-    if (currentUser) {
-      localStorage.setItem(`midlex_chats_${currentUser.id}`, JSON.stringify(finalMessages));
-    }
+    // Save explorer action in chat history list
+    updateChatsList(activeChatId, finalMessages, newSources, newReasoning, `Browse: ${section.section}`);
   };
 
   return (
@@ -195,15 +306,17 @@ function App() {
       {/* Background Watermark Coat of Arms */}
       <div className="watermark-bg"></div>
 
-      {/* Left Panel: Legal Sources & Rationale */}
-      <LeftPanel 
-        sources={activeSources} 
-        reasoning={activeReasoning}
-        bookmarks={bookmarks}
-        onToggleBookmark={handleToggleBookmark}
+      {/* Left Sidebar: Saved Chats List */}
+      <SavedChatsPanel
+        chats={chats}
+        activeChatId={activeChatId}
+        onSelectChat={handleSelectChat}
+        onCreateNewChat={handleCreateNewChat}
+        onDeleteChat={handleDeleteChat}
+        currentUser={currentUser}
       />
 
-      {/* Right Panel: Main UI & Assistant Chat */}
+      {/* Center Panel: Main UI & Assistant Chat */}
       <div className="assistant-panel">
         {/* Topbar navigation */}
         <header className="app-topbar">
@@ -237,6 +350,14 @@ function App() {
           onSuggestionClick={handleSuggestionClick}
         />
       </div>
+
+      {/* Right Sidebar: Legal Sources & Rationale */}
+      <RightPanel 
+        sources={activeSources} 
+        reasoning={activeReasoning}
+        bookmarks={bookmarks}
+        onToggleBookmark={handleToggleBookmark}
+      />
 
       {/* Document Explorer Modal */}
       {showExplorer && (

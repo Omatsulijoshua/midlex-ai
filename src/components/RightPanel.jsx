@@ -1,11 +1,11 @@
 import React from 'react';
-import { BookOpen, Bookmark, Award, HelpCircle, FileText } from 'lucide-react';
+import { BookOpen, Bookmark, Award, FileText } from 'lucide-react';
 
-export function LeftPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark }) {
+export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark }) {
   const hasSources = sources && sources.length > 0;
 
   return (
-    <aside className="sources-panel" aria-label="Legal analysis and sources">
+    <aside className="sources-panel right-sources-panel" aria-label="Legal analysis and sources">
       <div className="panel-header">
         <BookOpen className="text-gold" size={20} style={{ color: 'var(--gold-primary)' }} />
         <div>
@@ -112,12 +112,6 @@ export function LeftPanel({ sources = [], reasoning = [], bookmarks = [], onTogg
             })}
           </>
         )}
-      </div>
-      <div className="sources-footer">
-        <a href="https://midlex-llp.vercel.app/" target="_blank" rel="noopener noreferrer" className="footer-link">
-          <img src="/midlex_logo.png" alt="Midlex Logo" className="footer-logo" />
-          <span>Powered by Midlex LLP</span>
-        </a>
       </div>
     </aside>
   );
