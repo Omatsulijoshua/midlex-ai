@@ -418,6 +418,7 @@ function App() {
           onClearChat={handleClearChat}
           isGenerating={isGenerating}
           onSuggestionClick={handleSuggestionClick}
+          currentUser={currentUser}
         />
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Trash2, ArrowRight, BookOpen } from 'lucide-react';
 
-export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerating, onSuggestionClick }) {
+export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerating, onSuggestionClick, currentUser }) {
   const [input, setInput] = useState('');
   const [thinkingText, setThinkingText] = useState('Searching legal database...');
   const messagesEndRef = useRef(null);
@@ -121,7 +121,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
           messages.map((msg, index) => (
             <div key={index} className={`message-bubble ${msg.role}`}>
               <div className={`avatar ${msg.role}`}>
-                {msg.role === 'user' ? 'U' : 'AI'}
+                {msg.role === 'user' ? (currentUser ? currentUser.avatar : 'U') : 'AI'}
               </div>
               <div className="message-content">
                 <div style={{ whiteSpace: 'pre-wrap' }}>
