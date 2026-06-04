@@ -7,6 +7,7 @@ import { RightPanel } from './components/RightPanel';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { ArticlesModal } from './components/ArticlesModal';
 import { searchLegalDatabase } from './utils/legalSearch';
+import { fetchWithTimeout, getApiUrl } from './utils/api';
 import { Scale, BookOpen, Menu, FileText } from 'lucide-react';
 
 function App() {
@@ -40,8 +41,12 @@ function App() {
       const isTracked = sessionStorage.getItem('midlex_session_tracked');
       if (!isTracked) {
         try {
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-          await fetch(`${API_URL}/api/analytics/visit`, { method: 'POST' });
+          const API_URL = getApiUrl();
+          if (!API_URL) {
+            sessionStorage.setItem('midlex_session_tracked', 'true');
+            return;
+          }
+          await fetchWithTimeout(`${API_URL}/api/analytics/visit`, { method: 'POST' }, 6000);
           sessionStorage.setItem('midlex_session_tracked', 'true');
         } catch (err) {
           console.warn('Analytics backend unreachable for visit logging:', err.message);
@@ -70,12 +75,13 @@ function App() {
     if (currentUser) {
       const syncSubscription = async () => {
         try {
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-          await fetch(`${API_URL}/api/analytics/subscribe`, {
+          const API_URL = getApiUrl();
+          if (!API_URL) return;
+          await fetchWithTimeout(`${API_URL}/api/analytics/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: currentUser.email, subscribed })
-          });
+          }, 6000);
         } catch (err) {
           console.warn('Failed to sync newsletter subscription status:', err.message);
         }
@@ -167,12 +173,13 @@ function App() {
     if (user) {
       const trackRegistration = async () => {
         try {
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-          await fetch(`${API_URL}/api/analytics/register`, {
+          const API_URL = getApiUrl();
+          if (!API_URL) return;
+          await fetchWithTimeout(`${API_URL}/api/analytics/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: user.email })
-          });
+          }, 6000);
         } catch (err) {
           console.warn('Analytics backend unreachable for registration logging:', err.message);
         }
@@ -234,15 +241,19 @@ function App() {
     const startTime = Date.now();
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const API_URL = getApiUrl();
+      if (!API_URL) {
+        throw new Error('No production API URL configured');
+      }
+
       // Attempt backend API fetch
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetchWithTimeout(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ message: text }),
-      });
+      }, 15000);
 
       if (!response.ok) {
         throw new Error('API server returned error status');

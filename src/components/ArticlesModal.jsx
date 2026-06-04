@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Calendar, BookOpen, X, Scale, Shield, Vote, Home, Newspaper } from 'lucide-react';
+import { fetchWithTimeout, getApiUrl } from '../utils/api';
 
 export function ArticlesModal({ onClose }) {
   const [articles, setArticles] = useState([]);
@@ -14,8 +15,12 @@ export function ArticlesModal({ onClose }) {
       setIsLoading(true);
       setError('');
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        const response = await fetch(`${API_URL}/api/articles`);
+        const API_URL = getApiUrl();
+        if (!API_URL) {
+          throw new Error('Published articles are unavailable until the production backend URL is configured.');
+        }
+
+        const response = await fetchWithTimeout(`${API_URL}/api/articles`, {}, 10000);
         if (!response.ok) {
           throw new Error('Failed to load published articles.');
         }

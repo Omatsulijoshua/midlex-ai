@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, FileText, Calendar, Clock, X, Send, BookOpen } from 'lucide-react';
+import { fetchWithTimeout, getApiUrl } from '../utils/api';
 
 export function AdminDashboardModal({ onClose }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -36,12 +37,16 @@ export function AdminDashboardModal({ onClose }) {
     setError('');
     setPublishSuccess('');
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/admin/login`, {
+      const API_URL = getApiUrl();
+      if (!API_URL) {
+        throw new Error('Admin backend is unavailable until the production API URL is configured.');
+      }
+
+      const response = await fetchWithTimeout(`${API_URL}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'midlexllp01@gmail.com', password: 'Admin@123' })
-      });
+      }, 10000);
 
       if (!response.ok) {
         throw new Error('Failed to load analytics statistics.');
@@ -67,12 +72,16 @@ export function AdminDashboardModal({ onClose }) {
     setError('');
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/admin/login`, {
+      const API_URL = getApiUrl();
+      if (!API_URL) {
+        throw new Error('Admin backend is unavailable until the production API URL is configured.');
+      }
+
+      const response = await fetchWithTimeout(`${API_URL}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
-      });
+      }, 10000);
 
       if (!response.ok) {
         const errData = await response.json();
@@ -102,8 +111,12 @@ export function AdminDashboardModal({ onClose }) {
     setPublishSuccess('');
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/admin/publish-article`, {
+      const API_URL = getApiUrl();
+      if (!API_URL) {
+        throw new Error('Newsletter backend is unavailable until the production API URL is configured.');
+      }
+
+      const response = await fetchWithTimeout(`${API_URL}/api/admin/publish-article`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +128,7 @@ export function AdminDashboardModal({ onClose }) {
           content: newsContent,
           audience: newsAudience
         })
-      });
+      }, 15000);
 
       if (!response.ok) {
         const errData = await response.json();
