@@ -31,7 +31,7 @@ export function AdminDashboardModal({ onClose }) {
     }
   }, []);
 
-  const fetchStats = async () => {
+  async function fetchStats() {
     setIsSubmitting(true);
     setError('');
     setPublishSuccess('');
@@ -54,7 +54,7 @@ export function AdminDashboardModal({ onClose }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();

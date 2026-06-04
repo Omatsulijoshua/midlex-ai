@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Plus, Trash2, History, Lock } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, History, Lock, Newspaper } from 'lucide-react';
 
 export function SavedChatsPanel({ 
   chats = [], 
