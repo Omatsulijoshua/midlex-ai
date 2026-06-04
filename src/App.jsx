@@ -4,6 +4,7 @@ import { ChatAssistant } from './components/ChatAssistant';
 import { AuthManager } from './components/AuthManager';
 import { DocumentExplorer } from './components/DocumentExplorer';
 import { RightPanel } from './components/RightPanel';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { searchLegalDatabase } from './utils/legalSearch';
 import { Scale, BookOpen } from 'lucide-react';
 
@@ -23,13 +24,28 @@ function App() {
   const [bookmarks, setBookmarks] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
-  // Load bookmarks on mount
+  // Load bookmarks & track page visits on mount
   useEffect(() => {
     const savedBookmarks = localStorage.getItem('midlex_bookmarks');
     if (savedBookmarks) {
       setBookmarks(JSON.parse(savedBookmarks));
     }
+
+    const trackVisit = async () => {
+      const isTracked = sessionStorage.getItem('midlex_session_tracked');
+      if (!isTracked) {
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          await fetch(`${API_URL}/api/analytics/visit`, { method: 'POST' });
+          sessionStorage.setItem('midlex_session_tracked', 'true');
+        } catch (err) {
+          console.warn('Analytics backend unreachable for visit logging:', err.message);
+        }
+      }
+    };
+    trackVisit();
   }, []);
 
   // Sync bookmarks to localStorage
@@ -123,6 +139,23 @@ function App() {
   // Handle User Change (login/logout)
   const handleUserChange = (user) => {
     setCurrentUser(user);
+    
+    // Ping registration tracking if user signed in
+    if (user) {
+      const trackRegistration = async () => {
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          await fetch(`${API_URL}/api/analytics/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email })
+          });
+        } catch (err) {
+          console.warn('Analytics backend unreachable for registration logging:', err.message);
+        }
+      };
+      trackRegistration();
+    }
     
     // Determine the key for the incoming user status
     const key = getChatsStorageKey(user);
@@ -314,6 +347,7 @@ function App() {
         onCreateNewChat={handleCreateNewChat}
         onDeleteChat={handleDeleteChat}
         currentUser={currentUser}
+        onAdminClick={() => setShowAdmin(true)}
       />
 
       {/* Center Panel: Main UI & Assistant Chat */}
@@ -364,6 +398,13 @@ function App() {
         <DocumentExplorer 
           onClose={() => setShowExplorer(false)} 
           onSelectSection={handleSelectExplorerSection}
+        />
+      )}
+
+      {/* Admin Dashboard Modal */}
+      {showAdmin && (
+        <AdminDashboardModal 
+          onClose={() => setShowAdmin(false)}
         />
       )}
     </div>

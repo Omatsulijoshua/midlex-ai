@@ -7,7 +7,8 @@ export function SavedChatsPanel({
   onSelectChat, 
   onCreateNewChat, 
   onDeleteChat, 
-  currentUser 
+  currentUser,
+  onAdminClick
 }) {
   return (
     <aside className="history-panel" aria-label="Chat history">
@@ -75,11 +76,33 @@ export function SavedChatsPanel({
       </div>
 
       {/* Footer Branding */}
-      <div className="sources-footer">
+      <div className="sources-footer" style={{ flexDirection: 'column', gap: '14px', padding: '24px 20px' }}>
         <a href="https://midlex-llp.vercel.app/" target="_blank" rel="noopener noreferrer" className="footer-link">
           <img src="/midlex_logo.png" alt="Midlex Logo" className="footer-logo" />
           <span>Powered by Midlex LLP</span>
         </a>
+        
+        <button 
+          className="admin-link-btn" 
+          onClick={onAdminClick}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            fontSize: '0.7rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            letterSpacing: '0.8px',
+            textTransform: 'uppercase',
+            transition: 'var(--transition-smooth)',
+            marginTop: '4px'
+          }}
+          onMouseOver={(e) => e.target.style.color = 'var(--gold-primary)'}
+          onMouseOut={(e) => e.target.style.color = 'var(--text-muted)'}
+        >
+          🔑 Admin Desk
+        </button>
       </div>
     </aside>
   );
