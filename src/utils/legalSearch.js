@@ -27,6 +27,7 @@ const STOPWORDS = new Set([
 
 STOPWORDS.delete('constitution');
 STOPWORDS.delete('constitutions');
+STOPWORDS.delete('will');
 
 const SPELLING_CORRECTIONS = new Map([
   ['allowto', 'allowed to'],
@@ -44,6 +45,20 @@ const SPELLING_CORRECTIONS = new Map([
   ['nigeri', 'nigeria'],
   ['cort', 'court'],
   ['ad', 'and'],
+  ['accordg', 'according'],
+  ['acording', 'according'],
+  ['traditon', 'tradition'],
+  ['traddition', 'tradition'],
+  ['dad', 'father'],
+  ['dady', 'father'],
+  ['wrote', 'write'],
+  ['wirte', 'write'],
+  ['poperty', 'property'],
+  ['roperty', 'property'],
+  ['inheritence', 'inheritance'],
+  ['sucession', 'succession'],
+  ['succesion', 'succession'],
+  ['intestate', 'intestate'],
   ['neigbour', 'neighbour'],
   ['neigbor', 'neighbor'],
   ['neibor', 'neighbor'],
@@ -92,6 +107,13 @@ const CRASH_TOKENS = new Set([
   'accident', 'crash', 'collision', 'jammed', 'jamed', 'hit', 'rear', 'rearend', 'behind',
   'back', 'reversed', 'reverse', 'damage', 'bumper', 'insurance', 'claim', 'claiming',
   'fault', 'liability', 'negligence', 'witness', 'dashcam'
+]);
+
+const SUCCESSION_TOKENS = new Set([
+  'inherit', 'inheritance', 'succession', 'intestate', 'will', 'estate', 'property',
+  'father', 'dad', 'deceased', 'late', 'brother', 'sister', 'siblings', 'children',
+  'first', 'son', 'eldest', 'tradition', 'custom', 'customary', 'family', 'land',
+  'beneficiary', 'share', 'sharing', 'administrator', 'administration'
 ]);
 
 function normalizeQueryText(query) {
@@ -291,6 +313,18 @@ export function searchLegalDatabase(query) {
       score += 20;
     }
 
+    const hasSuccessionIssue = hasAny(tokens, SUCCESSION_TOKENS);
+
+    if (hasSuccessionIssue) {
+      if (['succession-customary-intestate', 'family-property-head-trustee', 'ukeje-v-ukeje-inheritance'].includes(item.id)) {
+        score += item.id === 'succession-customary-intestate' ? 45 : 34;
+      }
+
+      if (item.id === 'const-ch4-sec42' && (tokens.includes('sister') || tokens.includes('daughter') || tokens.includes('female') || tokens.includes('children'))) {
+        score += 25;
+      }
+    }
+
     const hasAnimalIssue = hasAny(tokens, ANIMAL_TOKENS);
     const hasHumanHomicideIssue = hasAny(tokens, HUMAN_HOMICIDE_TOKENS);
 
@@ -362,9 +396,17 @@ export function searchLegalDatabase(query) {
     responseText += `You can review the exact legal texts and reasoning details in the reference panel.`;
   }
 
+  const hasSuccessionMatch = topMatches.some(m => [
+    'succession-customary-intestate',
+    'family-property-head-trustee',
+    'ukeje-v-ukeje-inheritance'
+  ].includes(m.item.id));
+
   responseText = withConclusion(
     responseText,
-    "Keep evidence, report the matter to the appropriate authority where needed, and avoid admitting fault until the facts and documents have been properly reviewed."
+    hasSuccessionMatch
+      ? "Your brother should not simply take all the property because he is first son. Confirm whether there is a valid will, identify the type of property and marriage/custom involved, preserve title documents, and consult a probate or property lawyer about letters of administration or a family settlement."
+      : "Keep evidence, report the matter to the appropriate authority where needed, and avoid admitting fault until the facts and documents have been properly reviewed."
   );
 
   const sources = topMatches.map(m => ({

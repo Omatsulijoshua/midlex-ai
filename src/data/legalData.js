@@ -117,7 +117,7 @@ export const legalData = [
     title: "Right to Freedom from Discrimination",
     content: "A citizen of Nigeria of a particular community, ethnic group, place of origin, circumstance of birth, sex, religion or political opinion shall not, by reason only that he is such a person... be subjected to disabilities or restrictions to which other citizens are not made subject, or be accorded privileges or advantages not accorded to others.",
     reasoning: "This guarantees equality before the law. No state policy, employment, or treatment should discriminate based on gender, tribe, state of origin, religion, or circumstances of birth.",
-    keywords: ["discrimination", "equality", "gender", "tribe", "ethnic", "sexism", "tribalism", "nepotism", "origin", "marginalized"]
+    keywords: ["discrimination", "equality", "gender", "tribe", "ethnic", "sexism", "tribalism", "nepotism", "origin", "marginalized", "inheritance", "inherit", "succession", "female child", "daughter", "first son", "customary law", "tradition", "property sharing"]
   },
   {
     id: "land-sec1",
@@ -512,5 +512,47 @@ export const legalData = [
     keywords: ["custody", "children", "maintenance", "child support", "welfare", "guardianship", "education", "settlement", "divorce", "separation"],
     sourceUrl: "https://www.lawsofnigeria.placng.org/laws/M7.pdf",
     sourcePage: "PDF pages 21-22"
+  },
+  {
+    id: "succession-customary-intestate",
+    act: "Nigerian customary succession and intestacy principles",
+    category: "Property & Land Law",
+    chapter: "Inheritance",
+    part: "Intestate succession",
+    section: "No will / intestate estate",
+    title: "Property sharing where a father dies without a will",
+    content: "Where a person dies without a valid will, the estate is treated as an intestate estate. The applicable sharing rule depends on the deceased's personal law, the type of marriage, the location and title status of the property, any letters of administration, and any valid customary law that is proved and not contrary to the Constitution, natural justice, equity or good conscience.",
+    reasoning: "A first son or elder brother does not automatically become absolute owner of all the deceased father's property merely because tradition says he is first son. He may have a role as family head or administrator under some customs, but other lawful beneficiaries can challenge any attempt to exclude them, hide documents, sell family property alone, or deny daughters and other children their inheritance rights.",
+    keywords: ["inheritance", "inherit", "succession", "intestate", "intestacy", "no will", "without will", "wrote no will", "father died", "dad died", "deceased father", "late father", "property sharing", "share property", "family property", "estate", "brother", "elder brother", "first son", "eldest son", "tradition", "custom", "customary law", "take all property", "take property", "beneficiary", "children", "siblings", "letters of administration"],
+    sourceUrl: "https://www.escr-net.org/caselaw/2018/mrs-lois-chituru-ukeje-and-enyinaya-lazarus-ukeje-v-mrs-gladys-ada-ukeje-supreme-court/",
+    sourcePage: "Context: Nigerian Supreme Court treatment of customary inheritance and constitutional limits"
+  },
+  {
+    id: "family-property-head-trustee",
+    act: "Nigerian customary family property case law",
+    category: "Property & Land Law",
+    chapter: "Family land",
+    part: "Family head duties",
+    section: "Family head as trustee or manager",
+    title: "Family head cannot treat family property as personal property",
+    content: "Under Nigerian customary family-property principles, family property is generally managed by the family head for the benefit of the family. Dealings with family land or inherited family property normally require the participation or consent of the family head and principal family members; unilateral alienation by one person may be void or voidable depending on the facts.",
+    reasoning: "Even if the first son becomes the family head under a particular custom, that role is closer to trustee or manager than sole owner. He should consult the principal family members, account for family property, preserve estate documents, and avoid selling or transferring inherited property without proper family authority or court-backed administration.",
+    keywords: ["family property", "family land", "family house", "family head", "head of family", "trustee", "manager", "principal members", "consent", "sell family land", "sell inherited property", "alienation", "voidable", "void", "brother", "first son", "eldest son", "take all property", "tradition", "customary law", "inheritance", "estate", "property documents", "land documents"],
+    sourceUrl: "https://learningthelaw.org/class-notes/300l/land-law/alienation-of-family-land-in-nigeria-analysing-valid-void-and-voidable-sales/",
+    sourcePage: "Summary of Nigerian family land alienation principles and cases"
+  },
+  {
+    id: "ukeje-v-ukeje-inheritance",
+    act: "Ukeje v Ukeje (2014) 11 NWLR (Pt. 1418) 384, Supreme Court of Nigeria",
+    category: "Family Law",
+    chapter: "Customary inheritance",
+    part: "Constitutional limits",
+    section: "Female and child inheritance rights",
+    title: "Customary inheritance cannot discriminate against children by sex",
+    content: "The Supreme Court of Nigeria held that a customary rule which excludes a female child from inheriting from her father's estate conflicts with the non-discrimination guarantee in Section 42 of the 1999 Constitution and is void.",
+    reasoning: "This means a brother cannot rely on custom or first-son tradition to exclude sisters or other children from the deceased father's estate. Customary law remains important in succession, but it must yield where it violates constitutional equality or is repugnant to natural justice, equity and good conscience.",
+    keywords: ["Ukeje", "inheritance", "female inheritance", "daughter", "girl child", "female child", "first son", "brother", "sister", "children", "section 42", "discrimination", "customary law", "tradition", "father estate", "deceased father", "no will", "intestate", "property sharing"],
+    sourceUrl: "https://www.escr-net.org/caselaw/2018/mrs-lois-chituru-ukeje-and-enyinaya-lazarus-ukeje-v-mrs-gladys-ada-ukeje-supreme-court/",
+    sourcePage: "Supreme Court of Nigeria, SC. 224/2004 case summary"
   }
 ];
