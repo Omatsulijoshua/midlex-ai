@@ -3,6 +3,7 @@ import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash';
+const API_REVISION = 'gemini-header-auth-v1';
 
 function normalizeGeminiApiKey(value) {
   return (value || '').trim().replace(/^['"]|['"]$/g, '').trim();
@@ -23,6 +24,8 @@ function getGeminiKeyDiagnostics() {
     hasLeadingOrTrailingWhitespace: rawKey !== trimmedKey,
     hasWrappingQuotes: trimmedKey !== normalizedKey,
     hasEqualsPrefix: /^GEMINI_API_KEY\s*=/.test(trimmedKey),
+    authTransport: 'x-goog-api-key-header',
+    apiRevision: API_REVISION,
     model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
     fallbackModel: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
   };
