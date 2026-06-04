@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SavedChatsPanel } from './components/SavedChatsPanel';
 import { ChatAssistant } from './components/ChatAssistant';
 import { AuthManager } from './components/AuthManager';
@@ -9,6 +9,10 @@ import { ArticlesModal } from './components/ArticlesModal';
 import { searchLegalDatabase } from './utils/legalSearch';
 import { fetchWithTimeout, getApiUrl } from './utils/api';
 import { Scale, BookOpen, Menu, FileText } from 'lucide-react';
+
+const getChatsStorageKey = (user) => {
+  return user ? `midlex_user_chats_${user.id}` : 'midlex_guest_chats';
+};
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -90,11 +94,6 @@ function App() {
     }
   };
 
-  // Helper: Get localStorage key for chats depending on current user
-  const getChatsStorageKey = (user) => {
-    return user ? `midlex_user_chats_${user.id}` : 'midlex_guest_chats';
-  };
-
   // Helper: Create a fresh empty conversation session in memory
   const handleCreateNewChat = () => {
     const newId = `chat_${Date.now()}`;
@@ -166,7 +165,7 @@ function App() {
   };
 
   // Handle User Change (login/logout)
-  const handleUserChange = (user) => {
+  const handleUserChange = useCallback((user) => {
     setCurrentUser(user);
     
     // Ping registration tracking if user signed in
@@ -230,7 +229,7 @@ function App() {
     setMessages([]);
     setActiveSources([]);
     setActiveReasoning([]);
-  };
+  }, []);
 
   // Send Message Logic
   const handleSendMessage = async (text) => {
