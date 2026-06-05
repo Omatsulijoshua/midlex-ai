@@ -197,7 +197,7 @@ export function ChatAssistant({ messages, onSendMessage, onClearChat, isGenerati
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask a question about Nigerian law (e.g., 'fundamental rights', 'C of O revocation')..."
+              placeholder="Ask about Nigerian law..."
               disabled={isGenerating}
             />
             <div className="action-buttons">

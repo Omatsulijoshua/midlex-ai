@@ -167,13 +167,13 @@
     position: sticky;
     bottom: 0;
     z-index: 30;
-    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
-    margin: 0 -12px;
+    padding: 12px 12px calc(14px + env(safe-area-inset-bottom));
+    margin: 0;
     background:
-      linear-gradient(180deg, rgba(247, 251, 248, 0), var(--bg-primary, #f7fbf8) 18%),
+      linear-gradient(180deg, rgba(247, 251, 248, 0), var(--bg-primary, #f7fbf8) 26%),
       var(--bg-primary, #f7fbf8);
     border-top: 1px solid rgba(28, 70, 54, 0.14);
-    box-shadow: 0 -14px 30px rgba(22, 48, 38, 0.08);
+    box-shadow: 0 -12px 28px rgba(22, 48, 38, 0.08);
   }
 
   [data-theme="dark"] .input-panel {
@@ -185,69 +185,51 @@
   }
 
   .input-wrapper {
-    position: relative;
-    min-height: 58px;
+    width: 100%;
+    max-width: none;
+    min-height: 62px;
     align-items: center;
-    gap: 8px;
-    padding: 8px 8px 8px 40px;
+    gap: 10px;
+    padding: 7px 7px 7px 16px;
     background: var(--bg-secondary, #ffffff);
-    border: 1.5px solid rgba(18, 98, 72, 0.28);
-    border-radius: 16px;
+    border: 1px solid rgba(18, 98, 72, 0.18);
+    border-radius: 18px;
     box-shadow:
-      0 12px 28px rgba(19, 67, 49, 0.14),
-      0 0 0 3px rgba(16, 120, 89, 0.05);
+      0 12px 26px rgba(19, 67, 49, 0.1),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.55);
   }
 
-  .input-wrapper::before {
-    content: "";
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    width: 13px;
-    height: 13px;
-    border: 2px solid rgba(15, 122, 90, 0.62);
-    border-radius: 999px;
-    transform: translateY(-56%);
-    pointer-events: none;
-  }
-
-  .input-wrapper::after {
-    content: "";
-    position: absolute;
-    left: 28px;
-    top: 50%;
-    width: 8px;
-    height: 2px;
-    background: rgba(15, 122, 90, 0.62);
-    border-radius: 999px;
-    transform: translateY(5px) rotate(45deg);
-    transform-origin: left center;
-    pointer-events: none;
+  .input-wrapper:focus-within {
+    border-color: rgba(15, 122, 90, 0.58);
+    box-shadow:
+      0 14px 30px rgba(19, 67, 49, 0.13),
+      0 0 0 3px rgba(15, 122, 90, 0.1);
   }
 
   [data-theme="dark"] .input-wrapper {
     background: var(--bg-secondary, #101815);
-    border-color: rgba(73, 185, 139, 0.34);
+    border-color: rgba(73, 185, 139, 0.24);
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+
+  [data-theme="dark"] .input-wrapper:focus-within {
+    border-color: rgba(114, 220, 178, 0.55);
     box-shadow:
       0 14px 28px rgba(0, 0, 0, 0.32),
-      0 0 0 3px rgba(73, 185, 139, 0.08);
-  }
-
-  [data-theme="dark"] .input-wrapper::before {
-    border-color: rgba(114, 220, 178, 0.7);
-  }
-
-  [data-theme="dark"] .input-wrapper::after {
-    background: rgba(114, 220, 178, 0.7);
+      0 0 0 3px rgba(114, 220, 178, 0.1);
   }
 
   .chat-input {
-    min-height: 42px;
-    max-height: 110px;
-    padding: 10px 4px 8px 0;
-    font-size: 0.95rem;
-    line-height: 1.35;
+    height: 46px;
+    min-height: 46px;
+    max-height: 116px;
+    padding: 12px 4px 10px 0;
+    font-size: 1rem;
+    line-height: 1.3;
     background: transparent;
+    overflow-y: auto;
   }
 
   .chat-input::placeholder {
@@ -258,15 +240,19 @@
   .action-buttons {
     flex: 0 0 auto;
     align-self: center;
+    gap: 6px;
+  }
+
+  .action-buttons .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
   }
 
   .send-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
     color: #ffffff;
     background: linear-gradient(135deg, #0f7a5a, #145c45);
-    box-shadow: 0 8px 18px rgba(15, 122, 90, 0.28);
+    box-shadow: 0 8px 18px rgba(15, 122, 90, 0.24);
   }
 
   .send-btn:disabled {
