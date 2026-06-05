@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LogIn, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, ShieldCheck } from 'lucide-react';
 import { auth, googleProvider, isConfigured } from '../config/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
@@ -93,11 +93,22 @@ export function AuthManager({ onUserChange, currentUser }) {
           </div>
           <button 
             className="avatar user" 
-            onClick={handleSignOut} 
-            title="Click to sign out"
-            style={{ border: 'none', cursor: 'pointer' }}
+            type="button"
+            title={currentUser.name}
+            aria-label={`Signed in as ${currentUser.name}`}
+            style={{ border: 'none', cursor: 'default' }}
           >
             {currentUser.avatar}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary sign-out-btn"
+            onClick={handleSignOut}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut size={16} />
+            <span>Sign Out</span>
           </button>
         </>
       ) : (
