@@ -100,7 +100,7 @@ body {
 .watermark-bg {
   position: fixed;
   top: 55%;
-  left: 60%;
+  left: calc(280px + ((100vw - 280px - 380px) / 2));
   transform: translate(-50%, -50%);
   width: 55vw;
   height: 55vw;
@@ -136,9 +136,18 @@ body {
   .app-container {
     grid-template-columns: 240px 1fr 320px;
   }
+
+  .watermark-bg {
+    left: calc(240px + ((100vw - 240px - 320px) / 2));
+  }
 }
 
 @media (max-width: 1024px) {
+  .watermark-bg {
+    left: 50%;
+    top: 52%;
+  }
+
   .app-container {
     grid-template-columns: 1fr;
     height: 100vh;
