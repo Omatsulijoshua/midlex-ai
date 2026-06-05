@@ -13,6 +13,18 @@ const getChatsStorageKey = (user) => {
   return user ? `midlex_user_chats_${user.id}` : 'midlex_guest_chats';
 };
 
+const getAnalyticsSessionId = () => {
+  const key = 'midlex_analytics_session_id';
+  let sessionId = sessionStorage.getItem(key);
+
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(key, sessionId);
+  }
+
+  return sessionId;
+};
+
 const buildRequestHistory = (items) => {
   return items
     .filter(item => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string')
@@ -78,7 +90,13 @@ function App() {
             sessionStorage.setItem('midlex_session_tracked', 'true');
             return;
           }
-          await fetchWithTimeout(`${API_URL}/api/analytics/visit`, { method: 'POST' }, 6000);
+          await fetchWithTimeout(`${API_URL}/api/analytics/visit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: getAnalyticsSessionId()
+            })
+          }, 6000);
           sessionStorage.setItem('midlex_session_tracked', 'true');
         } catch (err) {
           console.warn('Analytics backend unreachable for visit logging:', err.message);
@@ -112,7 +130,13 @@ function App() {
           await fetchWithTimeout(`${API_URL}/api/analytics/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: currentUser.email, subscribed })
+            body: JSON.stringify({
+              email: currentUser.email,
+              userId: currentUser.id,
+              name: currentUser.name,
+              sessionId: getAnalyticsSessionId(),
+              subscribed
+            })
           }, 6000);
         } catch (err) {
           console.warn('Failed to sync newsletter subscription status:', err.message);
@@ -205,7 +229,12 @@ function App() {
           await fetchWithTimeout(`${API_URL}/api/analytics/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: user.email })
+            body: JSON.stringify({
+              email: user.email,
+              userId: user.id,
+              name: user.name,
+              sessionId: getAnalyticsSessionId()
+            })
           }, 6000);
         } catch (err) {
           console.warn('Analytics backend unreachable for registration logging:', err.message);
@@ -279,6 +308,12 @@ function App() {
         body: JSON.stringify({
           message: text,
           chatId: activeChatId,
+          sessionId: getAnalyticsSessionId(),
+          user: currentUser ? {
+            id: currentUser.id,
+            email: currentUser.email,
+            name: currentUser.name
+          } : null,
           conversationHistory: buildRequestHistory(messages)
         }),
       }, 20000);

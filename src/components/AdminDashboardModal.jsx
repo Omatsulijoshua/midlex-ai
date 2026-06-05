@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, FileText, Calendar, Clock, X, Send, BookOpen } from 'lucide-react';
+import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, FileText, Calendar, Clock, X, Send, BookOpen, Search, Tags } from 'lucide-react';
 import { fetchWithTimeout, getApiUrl } from '../utils/api';
 
 export function AdminDashboardModal({ onClose }) {
@@ -170,6 +170,12 @@ export function AdminDashboardModal({ onClose }) {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const getTopCategory = (categoryCounts = {}) => {
+    const entries = Object.entries(categoryCounts || {});
+    if (entries.length === 0) return 'None yet';
+    return entries.sort((a, b) => b[1] - a[1])[0][0];
   };
 
   return (
@@ -420,30 +426,45 @@ export function AdminDashboardModal({ onClose }) {
                       <span className="stat-label">Visits This Month</span>
                     </div>
                   </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon-box" style={{ backgroundColor: 'rgba(20,184,166,0.08)', color: '#2dd4bf' }}>
+                      <Search size={20} />
+                    </div>
+                    <div className="stat-details">
+                      <span className="stat-num">{stats.totalSearches || 0}</span>
+                      <span className="stat-label">Total Searches</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Analytical Columns */}
                 <div className="stats-columns-layout">
-                  {/* Left Column: Top Questions */}
+                  {/* Left Column: Search categories */}
                   <div className="dashboard-subpanel">
                     <div className="subpanel-header">
-                      <FileText size={16} style={{ color: 'var(--gold-primary)' }} />
-                      <h4>Top Questions Asked</h4>
+                      <Tags size={16} style={{ color: 'var(--gold-primary)' }} />
+                      <h4>Searches By Legal Area</h4>
                     </div>
                     <div className="subpanel-body">
-                      {stats.topQuestions.length === 0 ? (
-                        <p className="no-data-text">No queries logged in the analytics dataset yet.</p>
+                      {(stats.searchGroups || []).length === 0 ? (
+                        <p className="no-data-text">No categorized searches recorded yet.</p>
                       ) : (
                         <div className="top-questions-list">
-                          {stats.topQuestions.map((q, index) => {
-                            const maxCount = stats.topQuestions[0]?.count || 1;
-                            const pct = (q.count / maxCount) * 100;
+                          {stats.searchGroups.map((group, index) => {
+                            const maxCount = stats.searchGroups[0]?.count || 1;
+                            const pct = (group.count / maxCount) * 100;
                             return (
                               <div key={index} className="question-bar-item">
                                 <div className="question-text-row">
-                                  <span className="question-title-text">"{q.text}"</span>
-                                  <span className="question-badge">{q.count} query</span>
+                                  <span className="category-title-text">{group.category}</span>
+                                  <span className="question-badge">{group.count} search</span>
                                 </div>
+                                {group.latestQuestions?.[0] && (
+                                  <span className="category-latest-text">
+                                    Latest: "{group.latestQuestions[0].text}"
+                                  </span>
+                                )}
                                 <div className="progress-bar-bg">
                                   <div className="progress-bar-fill" style={{ width: `${pct}%` }}></div>
                                 </div>
@@ -469,20 +490,57 @@ export function AdminDashboardModal({ onClose }) {
                           <thead>
                             <tr>
                               <th>Client Email</th>
-                              <th>Sign-In Time</th>
+                              <th>Searches</th>
+                              <th>Top Area</th>
+                              <th>Last Seen</th>
                             </tr>
                           </thead>
                           <tbody>
                             {stats.registrations.map((reg, index) => (
                               <tr key={index}>
                                 <td className="email-cell">{reg.email} {reg.subscribed && <span title="Newsletter Opt-in" style={{ cursor: 'help' }}>🔔</span>}</td>
-                                <td className="time-cell">{formatTimestamp(reg.timestamp)}</td>
+                                <td className="time-cell">{reg.questionCount || 0}</td>
+                                <td className="time-cell">{getTopCategory(reg.categoryCounts)}</td>
+                                <td className="time-cell">{formatTimestamp(reg.lastSeen || reg.timestamp)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="dashboard-subpanel search-log-panel">
+                  <div className="subpanel-header">
+                    <FileText size={16} style={{ color: 'var(--gold-primary)' }} />
+                    <h4>Recent Searches</h4>
+                  </div>
+                  <div className="subpanel-body">
+                    {(stats.recentSearches || []).length === 0 ? (
+                      <p className="no-data-text">No searches recorded yet.</p>
+                    ) : (
+                      <table className="clients-table search-log-table">
+                        <thead>
+                          <tr>
+                            <th>Legal Area</th>
+                            <th>Search</th>
+                            <th>Client</th>
+                            <th>Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.recentSearches.map((item, index) => (
+                            <tr key={item.id || index}>
+                              <td className="time-cell">{item.category || 'General Nigerian Law'}</td>
+                              <td className="email-cell">{item.text}</td>
+                              <td className="time-cell">{item.email || 'Visitor'}</td>
+                              <td className="time-cell">{formatTimestamp(item.timestamp)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </div>
               </div>

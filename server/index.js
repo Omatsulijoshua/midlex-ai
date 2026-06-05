@@ -31,6 +31,294 @@ let analyticsData = {
   articles: []
 };
 
+function createAnalyticsId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function cleanString(value, maxLength = 240) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function normalizeEmail(value) {
+  return cleanString(value, 180).toLowerCase();
+}
+
+function normalizeUserPayload(user = {}) {
+  const safeUser = user && typeof user === 'object' ? user : {};
+  return {
+    id: cleanString(safeUser.id || safeUser.userId, 120),
+    email: normalizeEmail(safeUser.email),
+    name: cleanString(safeUser.name || safeUser.displayName, 120)
+  };
+}
+
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || '';
+}
+
+function normalizeAnalyticsCategory(category) {
+  const value = cleanString(category, 120).toLowerCase();
+
+  if (!value) return '';
+  if (/succession|inheritance|estate|probate|intestate|customary/.test(value)) return 'Succession & Inheritance';
+  if (/family|matrimonial|marriage|divorce|custody|maintenance/.test(value)) return 'Family Law';
+  if (/land|property|occupancy|lease|tenan|rent|house/.test(value)) return 'Land & Property';
+  if (/criminal|penal|crime|offence|offense/.test(value)) return 'Criminal Law';
+  if (/right|constitution|liberty|detention|police|bail|fair hearing/.test(value)) return 'Fundamental Rights';
+  if (/traffic|road|vehicle|tow|towing|accident|collision/.test(value)) return 'Road Traffic';
+  if (/animal|cruelty|dog|pet|livestock/.test(value)) return 'Animal Cruelty';
+  if (/election|electoral|bvas|inec/.test(value)) return 'Elections';
+
+  return category || 'General Nigerian Law';
+}
+
+function categorizeQuestion(text, localMatch = {}) {
+  const sourceCategory = (localMatch.sources || [])
+    .map(source => normalizeAnalyticsCategory(source.category || source.act || source.title))
+    .find(Boolean);
+
+  if (sourceCategory) return sourceCategory;
+
+  const value = cleanString(text, 1200).toLowerCase();
+
+  if (/succession|inherit|estate|probate|intestate|will|first son|eldest|family property|share property|father died|dad died/.test(value)) {
+    return 'Succession & Inheritance';
+  }
+  if (/marry|marriage|divorce|custody|maintenance|wife|husband|spouse|child support|forced marriage|remarry/.test(value)) {
+    return 'Family Law';
+  }
+  if (/land|property|house|tenant|landlord|rent|lease|certificate of occupancy|c of o|governor revoke|adverse possession|squat|living there/.test(value)) {
+    return 'Land & Property';
+  }
+  if (/car|vehicle|road|traffic|tow|towed|towing|accident|collision|jammed|hit from|lastma|vio|parking/.test(value)) {
+    return 'Road Traffic';
+  }
+  if (/dog|animal|pet|chicken|livestock|cruelty|poison/.test(value)) {
+    return 'Animal Cruelty';
+  }
+  if (/election|electoral|bvas|inec|vote|polling|candidate/.test(value)) {
+    return 'Elections';
+  }
+  if (/arrest|police|bail|detention|liberty|fundamental right|human right|torture|fair hearing/.test(value)) {
+    return 'Fundamental Rights';
+  }
+  if (/steal|theft|murder|kill|assault|fraud|criminal|crime|offence|offense|punishment/.test(value)) {
+    return 'Criminal Law';
+  }
+
+  return 'General Nigerian Law';
+}
+
+function ensureAnalyticsShape() {
+  analyticsData.visits = Array.isArray(analyticsData.visits) ? analyticsData.visits : [];
+  analyticsData.registrations = Array.isArray(analyticsData.registrations) ? analyticsData.registrations : [];
+  analyticsData.questions = Array.isArray(analyticsData.questions) ? analyticsData.questions : [];
+  analyticsData.articles = Array.isArray(analyticsData.articles) ? analyticsData.articles : [];
+
+  analyticsData.registrations = analyticsData.registrations.map(reg => {
+    const timestamp = Number(reg.timestamp || reg.firstSeen || reg.lastSeen || Date.now());
+    return {
+      ...reg,
+      email: normalizeEmail(reg.email),
+      userId: cleanString(reg.userId || reg.id, 120),
+      name: cleanString(reg.name, 120),
+      timestamp,
+      firstSeen: Number(reg.firstSeen || timestamp),
+      lastSeen: Number(reg.lastSeen || timestamp),
+      visitCount: Number(reg.visitCount || 0),
+      questionCount: Number(reg.questionCount || 0),
+      categoryCounts: reg.categoryCounts && typeof reg.categoryCounts === 'object' ? reg.categoryCounts : {},
+      searchHistory: Array.isArray(reg.searchHistory) ? reg.searchHistory.slice(0, 25) : []
+    };
+  }).filter(reg => reg.email);
+
+  analyticsData.questions = analyticsData.questions.map(question => ({
+    ...question,
+    id: question.id || createAnalyticsId('q'),
+    text: cleanString(question.text, 1200),
+    timestamp: Number(question.timestamp || Date.now()),
+    category: question.category || categorizeQuestion(question.text),
+    email: normalizeEmail(question.email),
+    userId: cleanString(question.userId, 120),
+    userName: cleanString(question.userName, 120),
+    chatId: cleanString(question.chatId, 120),
+    sessionId: cleanString(question.sessionId, 120),
+    sourceCategories: Array.isArray(question.sourceCategories) ? question.sourceCategories : []
+  })).filter(question => question.text);
+
+  rebuildRegistrationSearchStats();
+}
+
+function upsertRegistration(user, updates = {}) {
+  const normalized = normalizeUserPayload(user);
+  if (!normalized.email) return null;
+
+  let existing = analyticsData.registrations.find(reg => reg.email === normalized.email);
+  const now = Date.now();
+
+  if (!existing) {
+    existing = {
+      email: normalized.email,
+      userId: normalized.id,
+      name: normalized.name,
+      timestamp: now,
+      firstSeen: now,
+      lastSeen: now,
+      subscribed: true,
+      visitCount: 0,
+      questionCount: 0,
+      categoryCounts: {},
+      searchHistory: []
+    };
+    analyticsData.registrations.push(existing);
+  }
+
+  existing.userId = normalized.id || existing.userId || '';
+  existing.name = normalized.name || existing.name || '';
+  existing.timestamp = now;
+  existing.lastSeen = now;
+  existing.firstSeen = existing.firstSeen || now;
+  existing.visitCount = Number(existing.visitCount || 0);
+  existing.questionCount = Number(existing.questionCount || 0);
+  existing.categoryCounts = existing.categoryCounts && typeof existing.categoryCounts === 'object'
+    ? existing.categoryCounts
+    : {};
+  existing.searchHistory = Array.isArray(existing.searchHistory) ? existing.searchHistory : [];
+
+  if (typeof updates.subscribed === 'boolean') {
+    existing.subscribed = updates.subscribed;
+  }
+  if (updates.incrementVisit) {
+    existing.visitCount += 1;
+  }
+
+  return existing;
+}
+
+function updateRegisteredSearchStats(questionRecord) {
+  if (!questionRecord.email) return;
+
+  const reg = upsertRegistration({
+    email: questionRecord.email,
+    id: questionRecord.userId,
+    name: questionRecord.userName
+  });
+
+  if (!reg) return;
+
+  reg.questionCount = Number(reg.questionCount || 0) + 1;
+  reg.lastQuestion = questionRecord.text;
+  reg.lastQuestionAt = questionRecord.timestamp;
+  reg.categoryCounts[questionRecord.category] = Number(reg.categoryCounts[questionRecord.category] || 0) + 1;
+  reg.searchHistory = [
+    {
+      text: questionRecord.text,
+      category: questionRecord.category,
+      timestamp: questionRecord.timestamp,
+      chatId: questionRecord.chatId,
+      sessionId: questionRecord.sessionId
+    },
+    ...reg.searchHistory
+  ].slice(0, 25);
+}
+
+function rebuildRegistrationSearchStats() {
+  const byEmail = new Map();
+
+  for (const reg of analyticsData.registrations) {
+    reg.questionCount = 0;
+    reg.categoryCounts = {};
+    reg.searchHistory = [];
+    delete reg.lastQuestion;
+    delete reg.lastQuestionAt;
+    byEmail.set(reg.email, reg);
+  }
+
+  const questions = [...analyticsData.questions]
+    .filter(question => question.email)
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  for (const question of questions) {
+    const email = normalizeEmail(question.email);
+    if (!email) continue;
+
+    let reg = byEmail.get(email);
+    if (!reg) {
+      reg = {
+        email,
+        userId: cleanString(question.userId, 120),
+        name: cleanString(question.userName, 120),
+        timestamp: question.timestamp,
+        firstSeen: question.timestamp,
+        lastSeen: question.timestamp,
+        subscribed: true,
+        visitCount: 0,
+        questionCount: 0,
+        categoryCounts: {},
+        searchHistory: []
+      };
+      analyticsData.registrations.push(reg);
+      byEmail.set(email, reg);
+    }
+
+    reg.userId = cleanString(question.userId, 120) || reg.userId || '';
+    reg.name = cleanString(question.userName, 120) || reg.name || '';
+    reg.questionCount += 1;
+    reg.categoryCounts[question.category] = Number(reg.categoryCounts[question.category] || 0) + 1;
+    reg.lastSeen = Math.max(Number(reg.lastSeen || 0), Number(question.timestamp || 0));
+    reg.timestamp = Math.max(Number(reg.timestamp || 0), Number(question.timestamp || 0));
+
+    if (!reg.lastQuestionAt || question.timestamp > reg.lastQuestionAt) {
+      reg.lastQuestion = question.text;
+      reg.lastQuestionAt = question.timestamp;
+    }
+
+    if (reg.searchHistory.length < 25) {
+      reg.searchHistory.push({
+        text: question.text,
+        category: question.category,
+        timestamp: question.timestamp,
+        chatId: question.chatId,
+        sessionId: question.sessionId
+      });
+    }
+  }
+}
+
+function buildSearchGroups(questions) {
+  const groups = new Map();
+
+  for (const question of questions) {
+    const category = question.category || categorizeQuestion(question.text);
+    if (!groups.has(category)) {
+      groups.set(category, {
+        category,
+        count: 0,
+        latestAt: 0,
+        latestQuestions: []
+      });
+    }
+
+    const group = groups.get(category);
+    group.count += 1;
+    group.latestAt = Math.max(group.latestAt, Number(question.timestamp || 0));
+
+    if (group.latestQuestions.length < 5) {
+      group.latestQuestions.push({
+        text: question.text,
+        timestamp: question.timestamp,
+        email: question.email || ''
+      });
+    }
+  }
+
+  return [...groups.values()].sort((a, b) => b.count - a.count || b.latestAt - a.latestAt);
+}
+
 // Seed helper to populate analytics dashboard with realistic historical data on first run
 function seedAnalytics() {
   const now = Date.now();
@@ -78,15 +366,12 @@ function loadAnalytics() {
     if (fs.existsSync(ANALYTICS_FILE)) {
       const raw = fs.readFileSync(ANALYTICS_FILE, 'utf8');
       analyticsData = JSON.parse(raw);
+      ensureAnalyticsShape();
       console.log('📊 Loaded analytics database successfully.');
-      
-      // Safety checks for new properties
-      if (!analyticsData.articles) {
-        analyticsData.articles = [];
-      }
     } else {
       console.log('📊 Analytics file not found. Seeding initial mock database...');
       seedAnalytics();
+      ensureAnalyticsShape();
       saveAnalytics();
     }
   } catch (err) {
@@ -329,54 +614,61 @@ function getPublicGeminiError(err) {
 
 // Track page visit (Pinged by client session storage)
 app.post('/api/analytics/visit', (req, res) => {
+  const { sessionId, user, email, userId, name } = req.body || {};
+  const userInfo = normalizeUserPayload(user || { email, userId, name });
+  const timestamp = Date.now();
+
   analyticsData.visits.push({
-    timestamp: Date.now()
+    id: createAnalyticsId('visit'),
+    timestamp,
+    sessionId: cleanString(sessionId, 120),
+    email: userInfo.email,
+    userId: userInfo.id,
+    userName: userInfo.name,
+    ip: getClientIp(req),
+    userAgent: cleanString(req.headers['user-agent'], 500),
+    referer: cleanString(req.headers.referer || req.headers.referrer, 500),
+    origin: cleanString(req.headers.origin, 240)
   });
+
+  if (userInfo.email) {
+    upsertRegistration(userInfo, { incrementVisit: true });
+  }
+
   saveAnalytics();
   res.json({ success: true });
 });
 
 // Track registered user sign-in
 app.post('/api/analytics/register', (req, res) => {
-  const { email } = req.body;
-  if (email && email.trim() !== '') {
-    const cleanEmail = email.trim().toLowerCase();
-    
-    // Check if email already registered
-    const existing = analyticsData.registrations.find(r => r.email.toLowerCase() === cleanEmail);
-    if (!existing) {
-      analyticsData.registrations.push({
-        email: cleanEmail,
-        timestamp: Date.now(),
-        subscribed: true // Default to opt-in for first login
-      });
-    } else {
-      existing.timestamp = Date.now(); // Update last active timestamp
+  const { email, userId, name, sessionId } = req.body || {};
+  const userInfo = normalizeUserPayload({ email, userId, name });
+
+  if (userInfo.email) {
+    const registration = upsertRegistration(userInfo, { incrementVisit: true });
+    if (registration) {
+      registration.lastSessionId = cleanString(sessionId, 120);
     }
     saveAnalytics();
   }
+
   res.json({ success: true });
 });
 
 // Update client newsletter subscription opt-in
 app.post('/api/analytics/subscribe', (req, res) => {
-  const { email, subscribed } = req.body;
-  if (email && email.trim() !== '') {
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = analyticsData.registrations.find(r => r.email.toLowerCase() === cleanEmail);
-    
-    if (existing) {
-      existing.subscribed = !!subscribed;
-      console.log(`🔔 Subscription status updated for ${cleanEmail}: ${existing.subscribed}`);
-    } else {
-      analyticsData.registrations.push({
-        email: cleanEmail,
-        timestamp: Date.now(),
-        subscribed: !!subscribed
-      });
+  const { email, userId, name, sessionId, subscribed } = req.body || {};
+  const userInfo = normalizeUserPayload({ email, userId, name });
+
+  if (userInfo.email) {
+    const registration = upsertRegistration(userInfo, { subscribed: !!subscribed });
+    if (registration) {
+      registration.lastSessionId = cleanString(sessionId, 120);
+      console.log(`🔔 Subscription status updated for ${userInfo.email}: ${registration.subscribed}`);
     }
     saveAnalytics();
   }
+
   res.json({ success: true });
 });
 
@@ -456,23 +748,37 @@ app.post('/api/admin/login', (req, res) => {
     const visitsThisWeek = analyticsData.visits.filter(v => v.timestamp > now - 7 * oneDay).length;
     const visitsThisMonth = analyticsData.visits.filter(v => v.timestamp > now - 30 * oneDay).length;
 
+    ensureAnalyticsShape();
+
     // Registered clients
-    const registrations = [...analyticsData.registrations].sort((a, b) => b.timestamp - a.timestamp);
+    const registrations = [...analyticsData.registrations].sort((a, b) => b.lastSeen - a.lastSeen);
     const registeredCount = new Set(registrations.map(r => r.email)).size;
+    const questions = [...analyticsData.questions].sort((a, b) => b.timestamp - a.timestamp);
+    const searchGroups = buildSearchGroups(questions);
+    const totalSearches = questions.length;
 
     // Top questions count
     const questionCounts = {};
-    analyticsData.questions.forEach(q => {
-      const txt = q.text.trim();
+    questions.forEach(q => {
+      const txt = cleanString(q.text, 1200);
       if (txt) {
-        questionCounts[txt] = (questionCounts[txt] || 0) + 1;
+        if (!questionCounts[txt]) {
+          questionCounts[txt] = {
+            text: txt,
+            count: 0,
+            category: q.category || categorizeQuestion(txt),
+            latestAt: q.timestamp
+          };
+        }
+        questionCounts[txt].count += 1;
+        questionCounts[txt].latestAt = Math.max(questionCounts[txt].latestAt, q.timestamp);
       }
     });
 
-    const topQuestions = Object.entries(questionCounts)
-      .map(([text, count]) => ({ text, count }))
-      .sort((a, b) => b.count - a.count)
+    const topQuestions = Object.values(questionCounts)
+      .sort((a, b) => b.count - a.count || b.latestAt - a.latestAt)
       .slice(0, 15); // Show top 15 questions
+    const recentSearches = questions.slice(0, 50);
 
     // Historical articles list
     const articles = [...(analyticsData.articles || [])].sort((a, b) => b.timestamp - a.timestamp);
@@ -484,6 +790,9 @@ app.post('/api/admin/login', (req, res) => {
         visitsToday,
         visitsThisWeek,
         visitsThisMonth,
+        totalSearches,
+        searchGroups,
+        recentSearches,
         topQuestions,
         registrations: registrations.slice(0, 30), // Return last 30 registration activities
         articles: articles // History of published updates
@@ -496,7 +805,7 @@ app.post('/api/admin/login', (req, res) => {
 
 // Chat API Endpoint with RAG Flow
 app.post('/api/chat', async (req, res) => {
-  const { message, conversationHistory } = req.body;
+  const { message, conversationHistory, chatId, sessionId, user } = req.body;
 
   if (!message || message.trim() === '') {
     return res.status(400).json({ error: 'Message payload is required.' });
@@ -509,15 +818,29 @@ app.post('/api/chat', async (req, res) => {
 
   console.log(`💬 User Query: "${cleanMessage}"`);
 
-  // Log user question into analytics database
-  analyticsData.questions.push({
-    text: cleanMessage,
-    timestamp: Date.now()
-  });
-  saveAnalytics();
-
   // Step 1: Query local database to retrieve matching legal sections
   const localMatch = searchLegalDatabase(searchText);
+  const userInfo = normalizeUserPayload(user);
+  const sourceCategories = [...new Set((localMatch.sources || [])
+    .map(source => normalizeAnalyticsCategory(source.category || source.act || source.title))
+    .filter(Boolean))];
+  const questionRecord = {
+    id: createAnalyticsId('q'),
+    text: cleanMessage,
+    timestamp: Date.now(),
+    category: categorizeQuestion(cleanMessage, localMatch),
+    sessionId: cleanString(sessionId, 120),
+    chatId: cleanString(chatId, 120),
+    email: userInfo.email,
+    userId: userInfo.id,
+    userName: userInfo.name,
+    matchedSourcesCount: (localMatch.sources || []).length,
+    sourceCategories
+  };
+
+  analyticsData.questions.push(questionRecord);
+  updateRegisteredSearchStats(questionRecord);
+  saveAnalytics();
 
   if (!genAI) {
     return res.status(503).json({

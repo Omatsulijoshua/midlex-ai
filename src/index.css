@@ -1219,7 +1219,7 @@ body {
 /* Stat Cards */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -1358,6 +1358,24 @@ body {
   max-width: 80%;
 }
 
+.category-title-text {
+  color: var(--text-primary);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+.category-latest-text {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .question-badge {
   font-size: 0.7rem;
   color: var(--gold-primary);
@@ -1416,6 +1434,23 @@ body {
 
 .time-cell {
   color: var(--text-muted);
+}
+
+.search-log-panel {
+  height: 300px;
+  margin-top: 20px;
+}
+
+.search-log-table th:nth-child(2),
+.search-log-table td:nth-child(2) {
+  width: 45%;
+}
+
+.search-log-table td:nth-child(2) {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .no-data-text {
