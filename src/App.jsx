@@ -48,6 +48,25 @@ function App() {
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [showSourcesMobile, setShowSourcesMobile] = useState(false);
 
+  const activeSourcesCount = activeSources.length || activeReasoning.length || 0;
+
+  useEffect(() => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `mobile-sources-fab${showSourcesMobile ? ' is-open' : ''}`;
+    button.setAttribute('aria-label', `Show legal sources (${activeSourcesCount})`);
+    button.innerHTML = `<span>Sources</span><strong>${activeSourcesCount}</strong>`;
+
+    const handleClick = () => setShowSourcesMobile(true);
+    button.addEventListener('click', handleClick);
+    document.body.appendChild(button);
+
+    return () => {
+      button.removeEventListener('click', handleClick);
+      button.remove();
+    };
+  }, [activeSourcesCount, showSourcesMobile]);
+
   // Track page visits on mount
   useEffect(() => {
     const trackVisit = async () => {
@@ -303,7 +322,7 @@ function App() {
       setTimeout(() => {
         const assistantMessage = { 
           role: 'assistant', 
-          content: `**Gemini API unavailable:** ${err.message}\n\nPlease make sure the server has a valid **GEMINI_API_KEY** configured. I did not use the offline fallback for this answer.`,
+          content: `**AI service unavailable:** ${err.message}\n\nPlease try again shortly. If this continues, contact Midlex support.`,
           query: text
         };
         

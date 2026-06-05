@@ -168,6 +168,13 @@ const jurisdictionRule = `Jurisdiction rule:
 - For topics that often differ by state or region, such as tenancy, limitation/adverse possession, probate and inheritance, customary marriage, road traffic/towing rules, criminal code/penal code differences, land procedures, taxes, and local government rules, include a short jurisdiction note before the conclusion.
 - If several states have different rules for the same issue and you know the difference from the retrieved materials or reliable general knowledge, compare them briefly. Do not invent state laws, penalties, deadlines, or section numbers.`;
 
+const quotationRule = `Quotation rule:
+- When retrieved legal source text is available, include a short **Quoted law:** section before the explanation.
+- Quote the exact words from the retrieved "Official Text" only. Use quotation marks or blockquote formatting.
+- Every quote must name the Act/Code/Law, year where it appears in the title, chapter or part where provided, section, and source page/PDF page where provided.
+- Example citation style: **Land Use Act 1978, Part V, Section 28, PDF page 13:** "It shall be lawful for the Governor to revoke..."
+- If there is no retrieved exact text or page reference for a point, do not invent one. Say the exact quote is not available in the current sources and give the general principle carefully.`;
+
 const jurisdictionPatterns = [
   ['Abia State', /\babia\b/i],
   ['Adamawa State', /\badamawa\b/i],
@@ -284,6 +291,40 @@ function buildSearchText(message, history) {
     .join('\n');
 
   return `${recentUserContext}\n${message}`.trim();
+}
+
+function getPublicGeminiError(err) {
+  const message = err?.message || '';
+
+  if (/429|too many requests|quota|rate limit|rate-limits|retryDelay/i.test(message)) {
+    return {
+      status: 429,
+      code: 'GEMINI_QUOTA_LIMIT',
+      message: 'Gemini is temporarily busy or quota-limited. Please try again in about 1 minute.'
+    };
+  }
+
+  if (/503|overloaded|high demand|temporarily unavailable|unavailable/i.test(message)) {
+    return {
+      status: 503,
+      code: 'GEMINI_TEMPORARILY_BUSY',
+      message: 'Gemini is temporarily busy. Please try again shortly.'
+    };
+  }
+
+  if (/401|403|api key|authentication|permission|unauthorized|forbidden/i.test(message)) {
+    return {
+      status: 503,
+      code: 'GEMINI_CONFIGURATION_ERROR',
+      message: 'The AI service is not available right now. Please contact support if this continues.'
+    };
+  }
+
+  return {
+    status: 502,
+    code: 'GEMINI_REQUEST_FAILED',
+    message: 'The AI service could not complete that answer right now. Please try again.'
+  };
 }
 
 // Track page visit (Pinged by client session storage)
@@ -502,8 +543,11 @@ Please respond in character as a professional legal counsel:
 3. Keep the tone helpful, professional, and authoritative.
 4. Apply this rule in every answer:
 ${jurisdictionRule}
-5. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
-6. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+5. Apply this quotation rule:
+${quotationRule}
+6. When no retrieved exact legal text is available, do not fabricate statutory quotations, chapter numbers, page numbers, years, penalties, or deadlines.
+7. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
+8. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
         const generatedText = await generateGeminiText(systemPrompt);
         
@@ -515,8 +559,10 @@ ${jurisdictionRule}
         });
       } catch (err) {
         console.error('❌ Gemini direct reply failed:', err.message);
-        return res.status(502).json({
-          error: err.message || 'Gemini direct reply failed.',
+        const publicError = getPublicGeminiError(err);
+        return res.status(publicError.status).json({
+          error: publicError.message,
+          code: publicError.code,
           engine: 'gemini'
         });
       }
@@ -535,6 +581,7 @@ ${jurisdictionRule}
       // Grounding context construction
       const contextText = localMatch.sources.map((s, idx) => {
         return `[SOURCE ${idx + 1}]: ${s.act} - ${s.section} (Titled: "${s.title}")
+Citation Details: Act/Law: ${s.act}; Section: ${s.section}; Chapter/Part: ${s.chapter || "not provided"} / ${s.part || "not provided"}; Source page: ${s.sourcePage || "not provided"}
 Chapter/Part: ${s.chapter || ""} / ${s.part || ""}
 Official Text: "${s.content}"
 Standard Rationale: ${s.reasoning || ""}
@@ -556,7 +603,8 @@ ${conversationMemory}
 
 Instructions:
 1. Explain how these specific sections apply to the user's question.
-2. Quote or reference specific sections (e.g. **Section 34 of the Constitution** or **Section 1 of the Land Use Act**) directly to back up your points.
+2. Apply this quotation rule:
+${quotationRule}
 3. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
 4. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
 5. Apply this rule in every answer:
@@ -579,8 +627,10 @@ ${jurisdictionRule}
 
     } catch (err) {
       console.error('❌ Gemini RAG call failed:', err.message);
-      return res.status(502).json({
-        error: err.message || 'Gemini RAG call failed.',
+      const publicError = getPublicGeminiError(err);
+      return res.status(publicError.status).json({
+        error: publicError.message,
+        code: publicError.code,
         engine: 'gemini'
       });
     }

@@ -37,6 +37,14 @@ function formatGeminiError(error, diagnostics) {
     ? `${diagnostics.prefix}${diagnostics.suffix}`
     : 'the configured key';
 
+  if (/429|too many requests|quota|rate limit|rate-limits|retryDelay/i.test(message)) {
+    return 'Gemini is temporarily busy or quota-limited. Please try again in about 1 minute.';
+  }
+
+  if (/503|overloaded|high demand|temporarily unavailable|unavailable/i.test(message)) {
+    return 'Gemini is temporarily busy. Please try again shortly.';
+  }
+
   if (diagnostics.configured && (error.status === 401 || error.status === 403 || /invalid authentication credentials/i.test(message))) {
     return `Gemini rejected ${keyLabel} from the production server. The key is present, but Google is not authorizing it from Vercel. Create or rotate a Gemini API key in Google AI Studio, restrict it to the Gemini API only, avoid IP/referrer application restrictions for this serverless deployment, set it as GEMINI_API_KEY in Vercel Production, then redeploy.`;
   }
@@ -65,6 +73,7 @@ function parseBody(req) {
 
 function buildContext(sources) {
   return sources.map((source, index) => `[SOURCE ${index + 1}]: ${source.act} - ${source.section} (Titled: "${source.title}")
+Citation Details: Act/Law: ${source.act}; Section: ${source.section}; Chapter/Part: ${source.chapter || 'not provided'} / ${source.part || 'not provided'}; Source page: ${source.sourcePage || 'not provided'}
 Chapter/Part: ${source.chapter || ''} / ${source.part || ''}
 Official Text: "${source.content}"
 Standard Rationale: ${source.reasoning || ''}
@@ -78,6 +87,13 @@ const jurisdictionRule = `Jurisdiction rule:
 - If no state or region is known and the answer can differ by state, say clearly that state law may differ, give the general Nigerian/federal position, mention any relevant state-specific examples you know from reliable law or the retrieved materials, and ask the user to provide the state for a more precise answer.
 - For topics that often differ by state or region, such as tenancy, limitation/adverse possession, probate and inheritance, customary marriage, road traffic/towing rules, criminal code/penal code differences, land procedures, taxes, and local government rules, include a short jurisdiction note before the conclusion.
 - If several states have different rules for the same issue and you know the difference from the retrieved materials or reliable general knowledge, compare them briefly. Do not invent state laws, penalties, deadlines, or section numbers.`;
+
+const quotationRule = `Quotation rule:
+- When retrieved legal source text is available, include a short **Quoted law:** section before the explanation.
+- Quote the exact words from the retrieved "Official Text" only. Use quotation marks or blockquote formatting.
+- Every quote must name the Act/Code/Law, year where it appears in the title, chapter or part where provided, section, and source page/PDF page where provided.
+- Example citation style: **Land Use Act 1978, Part V, Section 28, PDF page 13:** "It shall be lawful for the Governor to revoke..."
+- If there is no retrieved exact text or page reference for a point, do not invent one. Say the exact quote is not available in the current sources and give the general principle carefully.`;
 
 const jurisdictionPatterns = [
   ['Abia State', /\babia\b/i],
@@ -219,7 +235,10 @@ Rules:
 2. Do not say "I could not find a direct match" or mention database limitations.
 3. Do not invent exact deadlines, penalties, court rules, or section numbers if you are not sure.
 4. Use clear headings and short paragraphs.
-5. Always end with a short final summary headed exactly **In conclusion:** that directly answers the question.`;
+5. Apply this quotation rule:
+${quotationRule}
+6. When no retrieved exact legal text is available, do not fabricate statutory quotations, chapter numbers, page numbers, years, penalties, or deadlines.
+7. Always end with a short final summary headed exactly **In conclusion:** that directly answers the question.`;
   }
 
   return `You are Midlex AI, an elite Nigerian legal assistant like a careful legal researcher.
@@ -240,12 +259,14 @@ ${jurisdictionRule}
 
 Instructions:
 1. Correct the user's spelling and infer the likely meaning silently.
-2. Explain the answer naturally, as a smart Nigerian-law assistant, not as a database search result.
-3. Cite or name the most relevant source, section, case, or principle from the retrieved materials where available.
-4. If the retrieved materials do not fully cover the answer, supplement carefully with general Nigerian legal principles and say when a fact depends on state/custom/court documents.
-5. Do not say "Based on the provided context", "I could not find", or mention database limitations.
-6. Do not invent exact deadlines, penalties, court rules, or section numbers if they are not in the materials or you are not sure.
-7. Always end with a short final summary headed exactly **In conclusion:** that directly answers the question and gives the safest next step.`;
+2. Apply this quotation rule:
+${quotationRule}
+3. Explain the answer naturally, as a smart Nigerian-law assistant, not as a database search result.
+4. Cite or name the most relevant source, section, case, or principle from the retrieved materials where available.
+5. If the retrieved materials do not fully cover the answer, supplement carefully with general Nigerian legal principles and say when a fact depends on state/custom/court documents.
+6. Do not say "Based on the provided context", "I could not find", or mention database limitations.
+7. Do not invent exact deadlines, penalties, court rules, or section numbers if they are not in the materials or you are not sure.
+8. Always end with a short final summary headed exactly **In conclusion:** that directly answers the question and gives the safest next step.`;
 }
 
 async function callGemini(prompt, modelName, apiKey) {
