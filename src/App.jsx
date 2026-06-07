@@ -35,6 +35,33 @@ const buildRequestHistory = (items) => {
     }));
 };
 
+const buildFrontendResearchBasis = (query) => {
+  const id = `frontend-research-${Date.now()}`;
+  const source = {
+    id,
+    category: 'Research Basis',
+    section: 'No verified source attached',
+    title: 'Answer generated without a returned citation',
+    act: 'Midlex AI / Gemini',
+    chapter: 'No matched local source',
+    part: 'General Nigerian-law response',
+    sourcePage: 'No official page retrieved',
+    sourceUrl: '',
+    isGeneratedBasis: true,
+    content: 'No exact official source or verified public example was returned for this answer. Sign-in is not required for sources; this means the answer did not include a matched public-law source card.',
+    reasoning: `The question "${query.trim().slice(0, 220)}" was answered without a returned citation payload. Verify any case names, public examples, or formal legal steps before relying on them.`
+  };
+
+  return {
+    sources: [source],
+    reasoning: [{
+      id,
+      source: source.section,
+      rationale: source.reasoning
+    }]
+  };
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -341,8 +368,13 @@ function App() {
       setMessages(finalMessages);
       
       // Update Right Panel sources and reasoning
-      const newSources = data.sources || [];
-      const newReasoning = data.reasoning || [];
+      const responseSources = data.sources || [];
+      const responseReasoning = data.reasoning || [];
+      const fallbackBasis = responseSources.length === 0
+        ? buildFrontendResearchBasis(text)
+        : null;
+      const newSources = fallbackBasis ? fallbackBasis.sources : responseSources;
+      const newReasoning = fallbackBasis ? fallbackBasis.reasoning : responseReasoning;
       setActiveSources(newSources);
       setActiveReasoning(newReasoning);
       setIsGenerating(false);
