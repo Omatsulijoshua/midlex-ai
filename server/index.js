@@ -460,6 +460,14 @@ const quotationRule = `Quotation rule:
 - Example citation style: **Land Use Act 1978, Part V, Section 28, PDF page 13:** "It shall be lawful for the Governor to revoke..."
 - If there is no retrieved exact text or page reference for a point, do not invent one. Say the exact quote is not available in the current sources and give the general principle carefully.`;
 
+const verifiedExamplesRule = `Verified public examples rule:
+- If a useful public example, decided case, public authority, or practical example is available from the retrieved source text, include it after the main answer under **Verified public example:**.
+- Before using any example, verify it against the retrieved materials. A verified example must be present in the retrieved source text, source title, source URL, or source page details.
+- If no verified public example is available from the retrieved materials, do not use examples or case names. Say briefly: "No verified public example is available from the current retrieved sources."
+- Do not guess, invent, or rely on memory for case examples, citations, locus classicus claims, public examples, dates, reporters, page numbers, or facts.
+- Do not use invented hypothetical examples as substitutes for verified public examples.
+- Never call a case the locus classicus unless that exact case and status are verified from the retrieved materials.`;
+
 const jurisdictionPatterns = [
   ['Abia State', /\babia\b/i],
   ['Adamawa State', /\badamawa\b/i],
@@ -609,6 +617,91 @@ function getPublicGeminiError(err) {
     status: 502,
     code: 'GEMINI_REQUEST_FAILED',
     message: 'The AI service could not complete that answer right now. Please try again.'
+  };
+}
+
+function extractCaseAuthorities(text) {
+  const value = cleanString(text, 4000);
+  const authorities = new Set();
+
+  const casePatterns = [
+    /\b[A-Z][A-Za-z0-9&.,'’ -]{2,80}\s+v\.?\s+[A-Z][A-Za-z0-9&.,'’ -]{2,80}(?:\s+\(\d{4}\)[A-Za-z0-9 .()/-]{0,80})?/g
+  ];
+
+  for (const pattern of casePatterns) {
+    for (const match of value.matchAll(pattern)) {
+      const cleaned = match[0]
+        .replace(/\s+/g, ' ')
+        .replace(/[.,;:\s]+$/, '')
+        .trim();
+
+      if (cleaned.length >= 8 && cleaned.length <= 180) {
+        authorities.add(cleaned);
+      }
+    }
+  }
+
+  return [...authorities].slice(0, 6);
+}
+
+function normalizeAuthorityText(value) {
+  return cleanString(value, 240)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findUnverifiedCaseAuthorities(answerText, verifiedText = '') {
+  const verified = normalizeAuthorityText(verifiedText);
+
+  return extractCaseAuthorities(answerText).filter(authority => {
+    const normalized = normalizeAuthorityText(authority);
+    return normalized && !verified.includes(normalized);
+  });
+}
+
+async function generateVerifiedGeminiText(prompt, verifiedText = '') {
+  const firstDraft = await generateGeminiText(prompt);
+  const unverifiedAuthorities = findUnverifiedCaseAuthorities(firstDraft, verifiedText);
+
+  if (unverifiedAuthorities.length === 0) {
+    return firstDraft;
+  }
+
+  const rewritePrompt = `${prompt}
+
+The previous draft named these case examples or public authorities, but they were not verified in the retrieved materials:
+${unverifiedAuthorities.map(item => `- ${item}`).join('\n')}
+
+Rewrite the answer now. Remove every unverified case example, reporter citation, locus classicus claim, public example, or external authority that is not present in the retrieved materials. Do not replace them with new examples. If no verified public example is available from the retrieved materials, say exactly: "No verified public example is available from the current retrieved sources." Keep the answer useful, practical, and end with **In conclusion:**.`;
+
+  return generateGeminiText(rewritePrompt);
+}
+
+function buildGeminiResearchBasis(question) {
+  const source = {
+    id: `gemini-research-${Date.now()}`,
+    category: 'Research Basis',
+    section: 'Gemini general legal knowledge',
+    title: 'Gemini-generated legal research basis',
+    act: 'Midlex AI / Gemini',
+    chapter: 'No matched local source',
+    part: 'General Nigerian-law response',
+    sourcePage: 'No official page retrieved',
+    sourceUrl: '',
+    isGeneratedBasis: true,
+    content: 'No exact official source or verified public example was retrieved from the Midlex local law database for this question. This card is not an official citation; it explains that the answer was generated without attaching a verified public example.',
+    reasoning: `The question "${cleanString(question, 220)}" did not match a stored Midlex public-code source strongly enough, so Gemini answered from general Nigerian-law knowledge. Unverified case examples should not be used for this answer.`
+  };
+
+  return {
+    sources: [source],
+    reasoning: [{
+      id: source.id,
+      source: source.section,
+      rationale: source.reasoning
+    }]
   };
 }
 
@@ -868,16 +961,19 @@ Please respond in character as a professional legal counsel:
 ${jurisdictionRule}
 5. Apply this quotation rule:
 ${quotationRule}
-6. When no retrieved exact legal text is available, do not fabricate statutory quotations, chapter numbers, page numbers, years, penalties, or deadlines.
-7. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
-8. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+6. Apply this public examples rule:
+${verifiedExamplesRule}
+7. When no retrieved exact legal text is available, do not fabricate statutory quotations, chapter numbers, page numbers, years, penalties, case examples, or deadlines.
+8. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
+9. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
-        const generatedText = await generateGeminiText(systemPrompt);
+        const generatedText = await generateVerifiedGeminiText(systemPrompt, cleanMessage);
+        const researchBasis = buildGeminiResearchBasis(cleanMessage);
         
         return res.json({
           answerText: generatedText,
-          sources: [],
-          reasoning: [],
+          sources: researchBasis.sources,
+          reasoning: researchBasis.reasoning,
           engine: 'gemini'
         });
       } catch (err) {
@@ -928,16 +1024,18 @@ Instructions:
 1. Explain how these specific sections apply to the user's question.
 2. Apply this quotation rule:
 ${quotationRule}
-3. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
-4. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
-5. Apply this rule in every answer:
+3. Apply this public examples rule:
+${verifiedExamplesRule}
+4. Keep the explanation readable and highly structured. Use paragraphs and bullet points.
+5. Maintain a professional, objective, and authoritative tone suitable for legal assistance.
+6. Apply this rule in every answer:
 ${jurisdictionRule}
-6. If the provided legal sections do not fully cover the answer, you may supplement it with your general knowledge of the Nigerian legal system.
-7. Do not invent procedural dates, waiting periods, filing deadlines, penalties, or court requirements unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
-8. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
-9. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+7. If the provided legal sections do not fully cover the answer, you may supplement it with general Nigerian legal principles, but do not add public examples or case names unless verified from the retrieved materials.
+8. Do not invent procedural dates, waiting periods, filing deadlines, penalties, case examples, court requirements, or locus classicus claims unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
+9. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
+10. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
 
-      const explanation = await generateGeminiText(systemPrompt);
+      const explanation = await generateVerifiedGeminiText(systemPrompt, `${contextText}\n${cleanMessage}`);
 
       console.log('✅ Gemini RAG explanation generated successfully.');
 

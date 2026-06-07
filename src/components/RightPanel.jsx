@@ -2,6 +2,7 @@ import { BookOpen, Bookmark, Award, FileText, X } from 'lucide-react';
 
 export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onToggleBookmark, mobileOpen, onCloseMobile }) {
   const hasSources = sources && sources.length > 0;
+  const isResearchBasisOnly = hasSources && sources.every(source => source.isGeneratedBasis);
 
   return (
     <aside className={`sources-panel right-sources-panel ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Legal analysis and sources">
@@ -69,7 +70,7 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
         ) : (
           <>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '-8px' }}>
-              Cited Authorities ({sources.length})
+              {isResearchBasisOnly ? 'Research Basis' : 'Cited Authorities'} ({sources.length})
             </div>
             
             {sources.map((source, index) => {
@@ -80,19 +81,21 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
                 <div key={source.id || index} className="glass-card source-card">
                   <div className="source-header">
                     <span className="source-tag">{source.category}</span>
-                    <button 
-                      className="icon-btn" 
-                      onClick={() => onToggleBookmark(source)}
-                      style={{ 
-                        padding: '4px', 
-                        width: '28px', 
-                        height: '28px', 
-                        color: isBookmarked ? 'var(--gold-primary)' : 'var(--text-secondary)'
-                      }}
-                      title={isBookmarked ? "Remove bookmark" : "Bookmark this section"}
-                    >
-                      <Bookmark size={14} fill={isBookmarked ? "currentColor" : "none"} />
-                    </button>
+                    {!source.isGeneratedBasis && (
+                      <button
+                        className="icon-btn"
+                        onClick={() => onToggleBookmark(source)}
+                        style={{
+                          padding: '4px',
+                          width: '28px',
+                          height: '28px',
+                          color: isBookmarked ? 'var(--gold-primary)' : 'var(--text-secondary)'
+                        }}
+                        title={isBookmarked ? "Remove bookmark" : "Bookmark this section"}
+                      >
+                        <Bookmark size={14} fill={isBookmarked ? "currentColor" : "none"} />
+                      </button>
+                    )}
                   </div>
                   
                   <div className="source-ref">
@@ -104,7 +107,7 @@ export function RightPanel({ sources = [], reasoning = [], bookmarks = [], onTog
                   </div>
                   
                   <div className="source-body">
-                    "{source.content}"
+                    {source.isGeneratedBasis ? source.content : `"${source.content}"`}
                   </div>
 
                   {reasonItem && (
