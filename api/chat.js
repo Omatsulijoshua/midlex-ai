@@ -4,8 +4,8 @@ import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
 const DEFAULT_GROQ_FALLBACK_MODEL = 'qwen/qwen3.8-27b';
-const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
-const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite';
 const API_REVISION = 'multi-provider-ai-v2';
 
 function normalizeApiKey(value) {
@@ -136,11 +136,9 @@ const quotationRule = `Quotation rule:
 - If there is no retrieved exact text or page reference for a point, do not invent one. Say the exact quote is not available in the current sources and give the general principle carefully.`;
 
 const verifiedExamplesRule = `Verified public examples rule:
-- If a useful public example, decided case, public authority, or practical example is available from the retrieved source text, include it after the main answer under **Verified public example:**.
-- Before using any example, verify it against the retrieved materials. A verified example must be present in the retrieved source text, source title, source URL, or source page details.
-- If no verified public example is available from the retrieved materials, do not use examples or case names. Say briefly: "No verified public example is available from the current retrieved sources."
-- Do not guess, invent, or rely on memory for case examples, citations, locus classicus claims, public examples, dates, reporters, page numbers, or facts.
-- Do not use invented hypothetical examples as substitutes for verified public examples.
+- STRICT PROHIBITION: DO NOT mention, cite, or formulate any case names in format "Party v. Party" or "X v. Y" unless that exact case name is explicitly written in the retrieved materials above.
+- If no verified public example is available from the retrieved materials, you MUST say under **Verified public example:** exactly: "No verified public example is available from the current retrieved sources."
+- Do not guess, invent, or rely on memory for case citations, law reports (NWLR, FWLR), dates, judges, or facts. Rely on statutory provisions and general principles of Nigerian law.
 - Never call a case the locus classicus unless that exact case and status are verified from the retrieved materials.`;
 
 const jurisdictionPatterns = [
@@ -313,14 +311,23 @@ async function generateVerifiedAiAnswer(prompt, verifiedText = '', preferredProv
     return firstDraft;
   }
 
-  const rewritePrompt = `${prompt}
+  try {
+    const rewritePrompt = `${prompt}
 
 The previous draft named these case examples or public authorities, but they were not verified in the retrieved materials:
 ${unverifiedAuthorities.map(item => `- ${item}`).join('\n')}
 
 Rewrite the answer now. Remove every unverified case example, reporter citation, locus classicus claim, public example, or external authority that is not present in the retrieved materials. Do not replace them with new examples. If no verified public example is available from the retrieved materials, say exactly: "No verified public example is available from the current retrieved sources." Keep the answer useful, practical, and end with **In conclusion:**.`;
 
-  return generateAiAnswer(rewritePrompt, preferredProvider, fallbackProvider, customKeys, customModels);
+    return await generateAiAnswer(rewritePrompt, preferredProvider, fallbackProvider, customKeys, customModels);
+  } catch (err) {
+    console.warn('Rewrite pass failed, returning sanitized first draft:', err?.message || err);
+    let sanitizedText = firstDraft.text;
+    for (const auth of unverifiedAuthorities) {
+      sanitizedText = sanitizedText.split(auth).join('[Unverified reference omitted]');
+    }
+    return { ...firstDraft, text: sanitizedText };
+  }
 }
 
 function buildAiResearchBasis(question, provider = 'AI') {
@@ -410,6 +417,19 @@ ${verifiedExamplesRule}
 }
 
 async function callGemini(prompt, modelName, apiKey) {
+  const generationConfig = {
+    temperature: 0.25,
+    topP: 0.9,
+    maxOutputTokens: 1800
+  };
+
+  // Only thinking-capable models accept thinkingConfig; other models return 400 invalid argument.
+  if (/gemini-(?:3\.[78]|2\.0.*thinking)/i.test(modelName)) {
+    generationConfig.thinkingConfig = {
+      thinkingBudget: 0
+    };
+  }
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
     {
@@ -425,14 +445,7 @@ async function callGemini(prompt, modelName, apiKey) {
             parts: [{ text: prompt }]
           }
         ],
-        generationConfig: {
-          temperature: 0.25,
-          topP: 0.9,
-          maxOutputTokens: 1800,
-          thinkingConfig: {
-            thinkingBudget: 0
-          }
-        }
+        generationConfig
       })
     }
   );
@@ -590,9 +603,11 @@ async function callGeminiProvider(prompt, customKeys = {}, customModels = {}) {
   const modelNames = [
     customModels?.geminiModel || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
     customModels?.geminiFallbackModel || process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL,
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
-    'gemini-2.5-flash'
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash'
   ].filter(Boolean);
 
   let lastError;

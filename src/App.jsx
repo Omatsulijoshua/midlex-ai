@@ -379,7 +379,7 @@ function App() {
           fallbackProvider: currentAiSettings.fallbackProvider,
           customKeys: currentAiSettings.customKeys
         }),
-      }, 25000);
+      }, 55000);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -390,8 +390,8 @@ function App() {
 
       // Enforce minimum thinking delay
       const elapsed = Date.now() - startTime;
-      if (elapsed < 3000) {
-        await new Promise(resolve => setTimeout(resolve, 3000 - elapsed));
+      if (elapsed < 2000) {
+        await new Promise(resolve => setTimeout(resolve, 2000 - elapsed));
       }
 
       const assistantMessage = { 
@@ -420,14 +420,19 @@ function App() {
       // Save to chat list
       updateChatsList(activeChatId, finalMessages, newSources, newReasoning, text);
     } catch (err) {
-      console.warn('Gemini API unavailable:', err.message);
+      console.warn('AI API unavailable:', err.message);
       const elapsed = Date.now() - startTime;
-      const remainingTime = Math.max(0, 3000 - elapsed);
+      const remainingTime = Math.max(0, 1500 - elapsed);
+
+      let errorMessage = err.message || 'AI service temporarily unavailable.';
+      if (err.name === 'AbortError' || /abort/i.test(errorMessage)) {
+        errorMessage = 'Request timed out while analyzing Nigerian legal authorities. Please try asking again.';
+      }
 
       setTimeout(() => {
         const assistantMessage = { 
           role: 'assistant', 
-          content: `**AI service unavailable:** ${err.message}\n\nPlease try again shortly. If this continues, contact Midlex support.`,
+          content: `**AI service notice:** ${errorMessage}\n\nPlease try again shortly. If this continues, contact Midlex support.`,
           query: text
         };
         
