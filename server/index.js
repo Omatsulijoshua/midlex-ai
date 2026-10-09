@@ -396,53 +396,288 @@ app.get('/', (req, res) => {
   res.send('Midlex AI Backend API is running successfully.');
 });
 
-// Initialize Google Gemini API
-function normalizeGeminiApiKey(value) {
+// Multi-Provider AI Engine (Gemini, Groq Fallback, OpenAI)
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_GROQ_FALLBACK_MODEL = 'qwen/qwen3.8-27b';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
+
+function normalizeApiKey(value) {
   return (value || '').trim().replace(/^['"]|['"]$/g, '').trim();
 }
 
-const apiKey = normalizeGeminiApiKey(process.env.GEMINI_API_KEY);
-const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const geminiFallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
-let genAI = null;
-
-if (apiKey) {
-  console.log('✅ Gemini API Key detected. Initializing Google Gen AI SDK...');
-  try {
-    genAI = new GoogleGenerativeAI(apiKey);
-  } catch (err) {
-    console.error('❌ Failed to initialize Google Gen AI SDK:', err.message);
-  }
-} else {
-  console.warn('⚠️ WARNING: GEMINI_API_KEY is not defined.');
-  console.warn('⚠️ Server will operate in Offline Fallback Mode, returning pre-authored database answers.');
+function isConfigured(value) {
+  return normalizeApiKey(value).length > 0;
 }
 
-async function generateGeminiText(prompt) {
-  const modelNames = [...new Set([geminiModel, geminiFallbackModel])];
-  let lastError = null;
+function normalizeProvider(value) {
+  const provider = String(value || '').trim().toLowerCase();
+  return ['auto', 'gemini', 'groq', 'openai'].includes(provider) ? provider : 'auto';
+}
 
-  function shouldTryNextModel(err) {
-    const message = err?.message || '';
-    const status = err?.status || err?.statusCode;
-    return [404, 429, 500, 502, 503, 504].includes(status) || /not found|not supported|high demand|overloaded|temporarily unavailable/i.test(message);
+function shouldTryNextAiProvider(error) {
+  const retryableStatuses = new Set([401, 403, 404, 429, 500, 502, 503, 504]);
+  const message = error.message || '';
+  return retryableStatuses.has(error.status) || /not configured|api key|authentication|unauthorized|forbidden|not found|not supported|high demand|overloaded|temporarily unavailable|quota/i.test(message);
+}
+
+async function callGemini(prompt, modelName, apiKey) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.25,
+          topP: 0.9,
+          maxOutputTokens: 1800,
+          thinkingConfig: {
+            thinkingBudget: 0
+          }
+        }
+      })
+    }
+  );
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Gemini request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.provider = 'gemini';
+    throw error;
   }
 
-  for (const modelName of modelNames) {
+  const text = payload?.candidates?.[0]?.content?.parts
+    ?.map(part => part.text || '')
+    .join('\n')
+    .trim();
+
+  if (!text) {
+    throw new Error('Gemini returned an empty response.');
+  }
+
+  return text;
+}
+
+async function callOpenAiCompatibleProvider({ endpoint, apiKey, modelName, prompt, provider }) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System. Follow instructions exactly.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.25,
+      top_p: 0.9,
+      max_tokens: 1800
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `${provider} request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.provider = provider;
+    throw error;
+  }
+
+  const text = payload?.choices?.[0]?.message?.content?.trim();
+
+  if (!text) {
+    throw new Error(`${provider} returned an empty response.`);
+  }
+
+  return text;
+}
+
+async function callGeminiProvider(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.geminiApiKey || customKeys?.geminiKey || process.env.GEMINI_API_KEY);
+
+  if (!apiKey) {
+    const error = new Error('GEMINI_API_KEY is not configured.');
+    error.status = 503;
+    error.provider = 'gemini';
+    throw error;
+  }
+
+  const modelNames = [
+    customModels?.geminiModel || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+    customModels?.geminiFallbackModel || process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL,
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-2.5-flash'
+  ].filter(Boolean);
+
+  let lastError;
+  for (const modelName of [...new Set(modelNames)]) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
-      return result.response.text();
-    } catch (err) {
-      lastError = err;
-      if (!shouldTryNextModel(err)) {
-        throw err;
+      return {
+        text: await callGemini(prompt, modelName, apiKey),
+        provider: 'gemini',
+        model: modelName
+      };
+    } catch (error) {
+      lastError = error;
+      if (!shouldTryNextAiProvider(error)) {
+        throw error;
       }
-      console.warn(`⚠️ Gemini model "${modelName}" unavailable. Trying fallback model if configured...`);
     }
   }
 
   throw lastError;
+}
+
+async function callGroq(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.groqApiKey || customKeys?.groqKey || process.env.GROQ_API_KEY);
+
+  if (!apiKey) {
+    const error = new Error('GROQ_API_KEY is not configured.');
+    error.status = 503;
+    error.provider = 'groq';
+    throw error;
+  }
+
+  const modelNames = [
+    customModels?.groqModel || process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
+    DEFAULT_GROQ_FALLBACK_MODEL,
+    'openai/gpt-oss-20b',
+    'llama-3.1-8b-instant'
+  ].filter(Boolean);
+
+  let lastError;
+  for (const modelName of [...new Set(modelNames)]) {
+    try {
+      return {
+        text: await callOpenAiCompatibleProvider({
+          endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+          apiKey,
+          modelName,
+          prompt,
+          provider: 'groq'
+        }),
+        provider: 'groq',
+        model: modelName
+      };
+    } catch (error) {
+      lastError = error;
+      if (!shouldTryNextAiProvider(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function callOpenAi(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.openaiApiKey || customKeys?.openaiKey || process.env.OPENAI_API_KEY);
+
+  if (!apiKey) {
+    const error = new Error('OPENAI_API_KEY is not configured.');
+    error.status = 503;
+    error.provider = 'openai';
+    throw error;
+  }
+
+  const model = customModels?.openaiModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+
+  return {
+    text: await callOpenAiCompatibleProvider({
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      apiKey,
+      modelName: model,
+      prompt,
+      provider: 'openai'
+    }),
+    provider: 'openai',
+    model
+  };
+}
+
+function buildProviderPlan(preferredProvider, fallbackProvider, customKeys = {}) {
+  const preferred = normalizeProvider(preferredProvider || process.env.AI_PROVIDER || 'auto');
+  const fallback = normalizeProvider(fallbackProvider || 'groq');
+
+  const configuredProviders = {
+    gemini: isConfigured(customKeys?.geminiApiKey || customKeys?.geminiKey || process.env.GEMINI_API_KEY),
+    groq: isConfigured(customKeys?.groqApiKey || customKeys?.groqKey || process.env.GROQ_API_KEY),
+    openai: isConfigured(customKeys?.openaiApiKey || customKeys?.openaiKey || process.env.OPENAI_API_KEY)
+  };
+  const onlyConfigured = (providers) => providers.filter(p => configuredProviders[p]);
+
+  let order;
+  if (preferred === 'auto' || preferred === 'gemini') {
+    order = ['gemini', fallback !== 'gemini' ? fallback : 'groq', 'openai'];
+  } else if (preferred === 'groq') {
+    order = ['groq', fallback !== 'groq' ? fallback : 'gemini', 'openai'];
+  } else if (preferred === 'openai') {
+    order = ['openai', fallback !== 'openai' ? fallback : 'groq', 'gemini'];
+  } else {
+    order = ['gemini', 'groq', 'openai'];
+  }
+
+  const deduped = [...new Set(order)];
+  const plan = onlyConfigured(deduped);
+  return plan.length > 0 ? plan : deduped;
+}
+
+async function generateAiAnswer(prompt, preferredProvider, fallbackProvider, customKeys, customModels) {
+  const providerPlan = buildProviderPlan(preferredProvider, fallbackProvider, customKeys);
+  let lastError;
+  const primaryProvider = providerPlan[0];
+
+  for (let i = 0; i < providerPlan.length; i++) {
+    const provider = providerPlan[i];
+    try {
+      let result;
+      if (provider === 'gemini') result = await callGeminiProvider(prompt, customKeys, customModels);
+      else if (provider === 'groq') result = await callGroq(prompt, customKeys, customModels);
+      else if (provider === 'openai') result = await callOpenAi(prompt, customKeys, customModels);
+
+      if (result) {
+        return {
+          ...result,
+          fallbackUsed: i > 0,
+          primaryProvider,
+          providerPlan
+        };
+      }
+    } catch (error) {
+      console.warn(`[Midlex AI] ${provider} failed (${error.message || error.status}). Attempting next provider in plan...`);
+      lastError = error;
+      if (!shouldTryNextAiProvider(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('No configured AI provider succeeded.');
 }
 
 const jurisdictionRule = `Jurisdiction rule:
@@ -661,9 +896,9 @@ function findUnverifiedCaseAuthorities(answerText, verifiedText = '') {
   });
 }
 
-async function generateVerifiedGeminiText(prompt, verifiedText = '') {
-  const firstDraft = await generateGeminiText(prompt);
-  const unverifiedAuthorities = findUnverifiedCaseAuthorities(firstDraft, verifiedText);
+async function generateVerifiedAiAnswer(prompt, verifiedText = '', preferredProvider = 'auto', fallbackProvider = 'groq', customKeys = {}, customModels = {}) {
+  const firstDraft = await generateAiAnswer(prompt, preferredProvider, fallbackProvider, customKeys, customModels);
+  const unverifiedAuthorities = findUnverifiedCaseAuthorities(firstDraft.text, verifiedText);
 
   if (unverifiedAuthorities.length === 0) {
     return firstDraft;
@@ -676,23 +911,23 @@ ${unverifiedAuthorities.map(item => `- ${item}`).join('\n')}
 
 Rewrite the answer now. Remove every unverified case example, reporter citation, locus classicus claim, public example, or external authority that is not present in the retrieved materials. Do not replace them with new examples. If no verified public example is available from the retrieved materials, say exactly: "No verified public example is available from the current retrieved sources." Keep the answer useful, practical, and end with **In conclusion:**.`;
 
-  return generateGeminiText(rewritePrompt);
+  return generateAiAnswer(rewritePrompt, preferredProvider, fallbackProvider, customKeys, customModels);
 }
 
-function buildGeminiResearchBasis(question) {
+function buildAiResearchBasis(question, provider = 'AI') {
   const source = {
-    id: `gemini-research-${Date.now()}`,
+    id: `ai-research-${Date.now()}`,
     category: 'Research Basis',
-    section: 'Gemini general legal knowledge',
-    title: 'Gemini-generated legal research basis',
-    act: 'Midlex AI / Gemini',
+    section: `${provider} general legal knowledge`,
+    title: 'AI-generated legal research basis',
+    act: `Midlex AI / ${provider}`,
     chapter: 'No matched local source',
     part: 'General Nigerian-law response',
     sourcePage: 'No official page retrieved',
     sourceUrl: '',
     isGeneratedBasis: true,
     content: 'No exact official source or verified public example was retrieved from the Midlex local law database for this question. This card is not an official citation; it explains that the answer was generated without attaching a verified public example.',
-    reasoning: `The question "${cleanString(question, 220)}" did not match a stored Midlex public-code source strongly enough, so Gemini answered from general Nigerian-law knowledge. Unverified case examples should not be used for this answer.`
+    reasoning: `The question "${cleanString(question, 220)}" did not match a stored Midlex public-code source strongly enough, so ${provider} answered from general Nigerian-law knowledge. Unverified case examples should not be used for this answer.`
   };
 
   return {
@@ -896,9 +1131,19 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// Chat API Endpoint with RAG Flow
+// Chat API Endpoint with Multi-Provider Support and Fallback
 app.post('/api/chat', async (req, res) => {
-  const { message, conversationHistory, chatId, sessionId, user } = req.body;
+  const {
+    message,
+    conversationHistory,
+    chatId,
+    sessionId,
+    user,
+    aiProvider,
+    fallbackProvider,
+    customKeys,
+    customModels
+  } = req.body || {};
 
   if (!message || message.trim() === '') {
     return res.status(400).json({ error: 'Message payload is required.' });
@@ -935,20 +1180,15 @@ app.post('/api/chat', async (req, res) => {
   updateRegisteredSearchStats(questionRecord);
   saveAnalytics();
 
-  if (!genAI) {
-    return res.status(503).json({
-      error: 'GEMINI_API_KEY is not configured on the server.',
-      engine: 'gemini'
-    });
-  }
+  const preferredProvider = normalizeProvider(aiProvider || process.env.AI_PROVIDER || 'auto');
+  const safeFallbackProvider = normalizeProvider(fallbackProvider || 'groq');
 
-  // If local match is a simple greeting or default helper message without sources
-  if (!localMatch.sources || localMatch.sources.length === 0) {
-    // If Gemini is active, let Gemini reply directly in character
-    if (genAI) {
-      try {
-        console.log('🤖 Querying Gemini for direct general greeting/helper reply...');
-        const systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
+  const hasSources = localMatch.sources && localMatch.sources.length > 0;
+  let systemPrompt;
+  let verifiedText;
+
+  if (!hasSources) {
+    systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
 The user sent a message or asked a question: "${cleanMessage}".
 
 ${conversationMemory}
@@ -966,48 +1206,18 @@ ${verifiedExamplesRule}
 7. When no retrieved exact legal text is available, do not fabricate statutory quotations, chapter numbers, page numbers, years, penalties, case examples, or deadlines.
 8. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
 9. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
-
-        const generatedText = await generateVerifiedGeminiText(systemPrompt, cleanMessage);
-        const researchBasis = buildGeminiResearchBasis(cleanMessage);
-        
-        return res.json({
-          answerText: generatedText,
-          sources: researchBasis.sources,
-          reasoning: researchBasis.reasoning,
-          engine: 'gemini'
-        });
-      } catch (err) {
-        console.error('❌ Gemini direct reply failed:', err.message);
-        const publicError = getPublicGeminiError(err);
-        return res.status(publicError.status).json({
-          error: publicError.message,
-          code: publicError.code,
-          engine: 'gemini'
-        });
-      }
-    } else {
-      return res.status(503).json({
-        error: 'GEMINI_API_KEY is not configured on the server.',
-        engine: 'gemini'
-      });
-    }
-  }
-
-  // Step 2: If we have legal sources and Gemini is active, execute RAG flow
-  if (genAI) {
-    try {
-      console.log(`📚 Found ${localMatch.sources.length} matching legal provision(s). Initiating Gemini RAG flow...`);
-      // Grounding context construction
-      const contextText = localMatch.sources.map((s, idx) => {
-        return `[SOURCE ${idx + 1}]: ${s.act} - ${s.section} (Titled: "${s.title}")
+    verifiedText = cleanMessage;
+  } else {
+    const contextText = localMatch.sources.map((s, idx) => {
+      return `[SOURCE ${idx + 1}]: ${s.act} - ${s.section} (Titled: "${s.title}")
 Citation Details: Act/Law: ${s.act}; Section: ${s.section}; Chapter/Part: ${s.chapter || "not provided"} / ${s.part || "not provided"}; Source page: ${s.sourcePage || "not provided"}
 Chapter/Part: ${s.chapter || ""} / ${s.part || ""}
 Official Text: "${s.content}"
 Standard Rationale: ${s.reasoning || ""}
 Reference: ${s.sourcePage || "Registry source"}${s.sourceUrl ? ` - ${s.sourceUrl}` : ""}`;
-      }).join('\n\n');
+    }).join('\n\n');
 
-      const systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
+    systemPrompt = `You are Midlex AI, an elite legal assistant specialized in the Nigerian Legal System.
 Your job is to explain the law to the user in a professional, clear, and objective tone.
 You must ground your explanation primarily in the provided Nigerian legal sections below.
 
@@ -1034,33 +1244,80 @@ ${jurisdictionRule}
 8. Do not invent procedural dates, waiting periods, filing deadlines, penalties, case examples, court requirements, or locus classicus claims unless they are present in the provided sources. If a detail is not in the sources, say that the user should confirm it from the court record or current rules.
 9. Always end with a short final summary headed exactly **In conclusion:** that directly answers the user's question and gives the safest next step.
 10. CRITICAL: Do NOT use robotic phrases such as "Based on the provided context...", "According to the context...", "There is no information in the context...", "The database does not contain...". Do NOT mention database limitations, missing files, or reference contexts. Speak naturally as an expert lawyer who knows the law.`;
+    verifiedText = `${contextText}\n${cleanMessage}`;
+  }
 
-      const explanation = await generateVerifiedGeminiText(systemPrompt, `${contextText}\n${cleanMessage}`);
+  try {
+    const generated = await generateVerifiedAiAnswer(systemPrompt, verifiedText, preferredProvider, safeFallbackProvider, customKeys, customModels);
+    const providerLabel = generated.provider ? generated.provider.toUpperCase() : 'AI';
+    const researchBasis = hasSources ? null : buildAiResearchBasis(cleanMessage, providerLabel);
 
-      console.log('✅ Gemini RAG explanation generated successfully.');
-
-      return res.json({
-        answerText: explanation,
-        sources: localMatch.sources,
-        reasoning: localMatch.reasoning,
-        engine: 'gemini'
-      });
-
-    } catch (err) {
-      console.error('❌ Gemini RAG call failed:', err.message);
-      const publicError = getPublicGeminiError(err);
-      return res.status(publicError.status).json({
-        error: publicError.message,
-        code: publicError.code,
-        engine: 'gemini'
-      });
-    }
-  } else {
-    return res.status(503).json({
-      error: 'GEMINI_API_KEY is not configured on the server.',
-      engine: 'gemini'
+    return res.json({
+      answerText: generated.text,
+      sources: hasSources ? localMatch.sources : researchBasis.sources,
+      reasoning: hasSources ? localMatch.reasoning : researchBasis.reasoning,
+      engine: generated.provider || 'ai',
+      provider: generated.provider || 'ai',
+      model: generated.model,
+      fallbackUsed: !!generated.fallbackUsed,
+      primaryProvider: generated.primaryProvider,
+      requestedProvider: preferredProvider
+    });
+  } catch (err) {
+    console.error('❌ AI generation failed across all providers:', err.message);
+    const publicError = getPublicGeminiError(err);
+    return res.status(publicError.status).json({
+      error: publicError.message,
+      code: publicError.code,
+      engine: preferredProvider
     });
   }
+});
+
+// Admin AI Settings & Diagnostics Endpoint
+app.get('/api/admin/ai-settings', (req, res) => {
+  res.json({
+    success: true,
+    aiProvider: process.env.AI_PROVIDER || 'auto',
+    geminiConfigured: isConfigured(process.env.GEMINI_API_KEY),
+    groqConfigured: isConfigured(process.env.GROQ_API_KEY),
+    openaiConfigured: isConfigured(process.env.OPENAI_API_KEY),
+    models: {
+      gemini: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+      groq: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
+      openai: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL
+    }
+  });
+});
+
+app.post('/api/admin/ai-settings', (req, res) => {
+  const { email, password, aiProvider, geminiApiKey, groqApiKey, openaiApiKey } = req.body || {};
+
+  if (email === 'midlexllp01@gmail.com' && password === 'Admin@123') {
+    if (aiProvider) {
+      process.env.AI_PROVIDER = normalizeProvider(aiProvider);
+    }
+    if (typeof geminiApiKey === 'string' && geminiApiKey.trim()) {
+      process.env.GEMINI_API_KEY = geminiApiKey.trim();
+    }
+    if (typeof groqApiKey === 'string' && groqApiKey.trim()) {
+      process.env.GROQ_API_KEY = groqApiKey.trim();
+    }
+    if (typeof openaiApiKey === 'string' && openaiApiKey.trim()) {
+      process.env.OPENAI_API_KEY = openaiApiKey.trim();
+    }
+
+    return res.json({
+      success: true,
+      message: 'Server AI settings updated successfully.',
+      aiProvider: process.env.AI_PROVIDER || 'auto',
+      geminiConfigured: isConfigured(process.env.GEMINI_API_KEY),
+      groqConfigured: isConfigured(process.env.GROQ_API_KEY),
+      openaiConfigured: isConfigured(process.env.OPENAI_API_KEY)
+    });
+  }
+
+  return res.status(401).json({ error: 'Invalid admin credentials.' });
 });
 
 // Start Server

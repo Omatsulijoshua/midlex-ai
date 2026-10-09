@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, FileText, Calendar, Clock, X, Send, BookOpen, Search, Tags } from 'lucide-react';
-import { fetchWithTimeout, getApiUrl } from '../utils/api';
+import { ShieldCheck, LogIn, RefreshCw, LogOut, Users, Eye, EyeOff, FileText, Calendar, Clock, X, Send, BookOpen, Search, Tags, Bot, Key, CheckCircle2, AlertCircle } from 'lucide-react';
+import { fetchWithTimeout, getApiUrl, getApiEndpoint } from '../utils/api';
 
 export function AdminDashboardModal({ onClose }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -12,8 +12,32 @@ export function AdminDashboardModal({ onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stats, setStats] = useState(null);
 
-  // Tab selector: 'analytics' or 'newsletter'
+  // Tab selector: 'analytics', 'newsletter', or 'ai'
   const [activeTab, setActiveTab] = useState('analytics');
+  const [aiProvider, setAiProvider] = useState(() => {
+    const savedProvider = localStorage.getItem('midlex_ai_provider') || 'auto';
+    return ['auto', 'gemini', 'openai', 'groq'].includes(savedProvider) ? savedProvider : 'auto';
+  });
+  const [fallbackProvider, setFallbackProvider] = useState(() => {
+    const savedFallback = localStorage.getItem('midlex_ai_fallback_provider') || 'groq';
+    return ['groq', 'gemini', 'openai', 'none'].includes(savedFallback) ? savedFallback : 'groq';
+  });
+  const [geminiKey, setGeminiKey] = useState(() => {
+    return localStorage.getItem('midlex_ai_gemini_key') || '';
+  });
+  const [groqKey, setGroqKey] = useState(() => {
+    return localStorage.getItem('midlex_ai_groq_key') || '';
+  });
+  const [openaiKey, setOpenaiKey] = useState(() => {
+    return localStorage.getItem('midlex_ai_openai_key') || '';
+  });
+
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [aiTestFeedback, setAiTestFeedback] = useState(null);
+  const [isSavingAi, setIsSavingAi] = useState(false);
 
   // Newsletter Composer Form States
   const [newsTitle, setNewsTitle] = useState('');
@@ -160,6 +184,102 @@ export function AdminDashboardModal({ onClose }) {
     setStats(null);
     setEmail('');
     setPassword('');
+  };
+
+  const handleSaveAiSettings = async () => {
+    setIsSavingAi(true);
+    setPublishSuccess('');
+    setError('');
+    setAiTestFeedback(null);
+
+    const safeProvider = aiProvider;
+    const safeFallback = fallbackProvider;
+    const safeGeminiKey = geminiKey.trim();
+    const safeGroqKey = groqKey.trim();
+    const safeOpenaiKey = openaiKey.trim();
+
+    localStorage.setItem('midlex_ai_provider', safeProvider);
+    localStorage.setItem('midlex_ai_fallback_provider', safeFallback);
+    localStorage.setItem('midlex_ai_gemini_key', safeGeminiKey);
+    localStorage.setItem('midlex_ai_groq_key', safeGroqKey);
+    localStorage.setItem('midlex_ai_openai_key', safeOpenaiKey);
+
+    window.dispatchEvent(new Event('midlex-ai-provider-change'));
+
+    // Attempt to sync to backend if backend server is available
+    try {
+      const API_URL = getApiUrl();
+      if (API_URL) {
+        await fetchWithTimeout(`${API_URL}/api/admin/ai-settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'midlexllp01@gmail.com',
+            password: 'Admin@123',
+            aiProvider: safeProvider,
+            fallbackProvider: safeFallback,
+            geminiApiKey: safeGeminiKey,
+            groqApiKey: safeGroqKey,
+            openaiApiKey: safeOpenaiKey
+          })
+        }, 6000);
+      }
+    } catch (err) {
+      console.warn('Backend AI settings sync note:', err.message);
+    } finally {
+      setIsSavingAi(false);
+    }
+
+    setPublishSuccess('AI configuration saved! Gemini primary & Groq fallback settings are now live.');
+  };
+
+  const handleTestAiConnection = async () => {
+    setIsTestingAi(true);
+    setAiTestFeedback(null);
+    setError('');
+    setPublishSuccess('');
+
+    try {
+      const chatApiUrl = getApiEndpoint('/api/chat', { sameOriginInProduction: true });
+      const testStart = Date.now();
+      const response = await fetchWithTimeout(chatApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Status check. Reply briefly confirming Nigerian legal desk readiness.',
+          aiProvider,
+          fallbackProvider,
+          customKeys: {
+            geminiApiKey: geminiKey.trim(),
+            groqApiKey: groqKey.trim(),
+            openaiApiKey: openaiKey.trim()
+          }
+        })
+      }, 15000);
+
+      const elapsed = Date.now() - testStart;
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Server returned error status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const engineUsed = (data.provider || data.engine || aiProvider).toUpperCase();
+      const fallbackMsg = data.fallbackUsed ? ' (Fallback Triggered: Primary provider passed to fallback)' : '';
+
+      setAiTestFeedback({
+        type: 'success',
+        message: `Connection successful in ${elapsed}ms! Provider: ${engineUsed}${fallbackMsg}. Model: ${data.model || 'Standard'}`
+      });
+    } catch (err) {
+      setAiTestFeedback({
+        type: 'error',
+        message: `Connection test failed: ${err.message}`
+      });
+    } finally {
+      setIsTestingAi(false);
+    }
   };
 
   const formatTimestamp = (ts) => {
@@ -345,6 +465,22 @@ export function AdminDashboardModal({ onClose }) {
                 }}
               >
                 Newsletter Desk
+              </button>
+              <button 
+                onClick={() => setActiveTab('ai')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: activeTab === 'ai' ? '2px solid var(--gold-primary)' : '2px solid transparent',
+                  color: activeTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  padding: '8px 16px',
+                  fontWeight: activeTab === 'ai' ? '600' : '500',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'var(--transition-smooth)'
+                }}
+              >
+                AI Settings
               </button>
             </div>
 
@@ -544,7 +680,7 @@ export function AdminDashboardModal({ onClose }) {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'newsletter' ? (
               // TAB 2: NEWSLETTER DESK VIEW
               <div className="dashboard-content newsletter-desk-content">
                 <div className="newsletter-split-layout">
@@ -697,6 +833,268 @@ export function AdminDashboardModal({ onClose }) {
                           </div>
                         ))
                       )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="dashboard-content">
+                <div className="dashboard-subpanel">
+                  <div className="subpanel-header">
+                    <Bot size={16} style={{ color: 'var(--gold-primary)' }} />
+                    <h4>AI Engine &amp; API Key Management</h4>
+                  </div>
+                  <div className="subpanel-body">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '640px' }}>
+                      
+                      {/* Provider Preference Selection */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Bot size={13} style={{ color: 'var(--gold-primary)' }} />
+                            <span>Primary AI Provider</span>
+                          </label>
+                          <select
+                            className="chat-input"
+                            value={aiProvider}
+                            onChange={(e) => setAiProvider(e.target.value)}
+                            style={{ borderRadius: '6px', fontSize: '0.82rem', height: '38px', padding: '0 10px', backgroundColor: 'var(--bg-secondary)' }}
+                          >
+                            <option value="auto">Auto: Gemini Primary, Groq Fallback (Recommended)</option>
+                            <option value="gemini">Google Gemini (Active)</option>
+                            <option value="groq">Groq (Llama-3.1 Instant - Fast)</option>
+                            <option value="openai">OpenAI (GPT-4o mini)</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <RefreshCw size={13} style={{ color: 'var(--gold-primary)' }} />
+                            <span>Fallback Provider</span>
+                          </label>
+                          <select
+                            className="chat-input"
+                            value={fallbackProvider}
+                            onChange={(e) => setFallbackProvider(e.target.value)}
+                            style={{ borderRadius: '6px', fontSize: '0.82rem', height: '38px', padding: '0 10px', backgroundColor: 'var(--bg-secondary)' }}
+                          >
+                            <option value="groq">Groq (Recommended Failover)</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="none">No Fallback (Fail immediately)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* API Keys Configuration */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        borderTop: '1px solid var(--border-light)',
+                        paddingTop: '14px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Key size={14} style={{ color: 'var(--gold-primary)' }} />
+                            <span>API Keys &amp; Credentials</span>
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            Saved in browser &amp; synced with server
+                          </span>
+                        </div>
+
+                        {/* Gemini Key */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>
+                              Google Gemini API Key {geminiKey ? <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>● Configured</span> : <span style={{ color: '#f87171', fontSize: '0.72rem' }}>○ Missing</span>}
+                            </label>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Primary engine</span>
+                          </div>
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input
+                              type={showGeminiKey ? 'text' : 'password'}
+                              className="chat-input"
+                              placeholder="AIzaSy... (or leave blank to use server environment key)"
+                              value={geminiKey}
+                              onChange={(e) => setGeminiKey(e.target.value)}
+                              style={{ borderRadius: '6px', fontSize: '0.82rem', height: '38px', padding: '0 40px 0 10px', width: '100%' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowGeminiKey(!showGeminiKey)}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title={showGeminiKey ? 'Hide key' : 'Show key'}
+                            >
+                              {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Groq Key */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>
+                              Groq API Key {groqKey ? <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>● Configured</span> : <span style={{ color: '#f87171', fontSize: '0.72rem' }}>○ Missing</span>}
+                            </label>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--gold-primary)' }}>Fallback failover key</span>
+                          </div>
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input
+                              type={showGroqKey ? 'text' : 'password'}
+                              className="chat-input"
+                              placeholder="gsk_... (or leave blank to use server environment key)"
+                              value={groqKey}
+                              onChange={(e) => setGroqKey(e.target.value)}
+                              style={{ borderRadius: '6px', fontSize: '0.82rem', height: '38px', padding: '0 40px 0 10px', width: '100%' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowGroqKey(!showGroqKey)}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title={showGroqKey ? 'Hide key' : 'Show key'}
+                            >
+                              {showGroqKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* OpenAI Key */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>
+                              OpenAI API Key {openaiKey ? <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>● Configured</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>○ Optional</span>}
+                            </label>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Optional alternate</span>
+                          </div>
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input
+                              type={showOpenaiKey ? 'text' : 'password'}
+                              className="chat-input"
+                              placeholder="sk-..."
+                              value={openaiKey}
+                              onChange={(e) => setOpenaiKey(e.target.value)}
+                              style={{ borderRadius: '6px', fontSize: '0.82rem', height: '38px', padding: '0 40px 0 10px', width: '100%' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title={showOpenaiKey ? 'Hide key' : 'Show key'}
+                            >
+                              {showOpenaiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Information Banner */}
+                      <div style={{
+                        backgroundColor: 'rgba(255,255,255,0.03)',
+                        border: '1px solid var(--border-light)',
+                        borderRadius: '6px',
+                        padding: '12px 14px',
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.5
+                      }}>
+                        💡 <strong>How it works:</strong> If Google Gemini encounters rate limits or quota delays, Midlex AI will automatically and seamlessly fall back to Groq without interrupting the user. You can switch to OpenAI at any time by selecting it above and entering your key.
+                      </div>
+
+                      {/* Test feedback box */}
+                      {aiTestFeedback && (
+                        <div style={{
+                          backgroundColor: aiTestFeedback.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                          border: `1px solid ${aiTestFeedback.type === 'success' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                          color: aiTestFeedback.type === 'success' ? '#4ade80' : '#f87171',
+                          padding: '10px 14px',
+                          borderRadius: '6px',
+                          fontSize: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          {aiTestFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                          <span>{aiTestFeedback.message}</span>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="google-signin-btn"
+                          onClick={handleSaveAiSettings}
+                          disabled={isSavingAi}
+                          style={{
+                            width: '180px',
+                            margin: 0,
+                            backgroundColor: 'var(--gold-primary)',
+                            border: 'none',
+                            color: 'black',
+                            fontWeight: '600',
+                            fontSize: '0.85rem',
+                            height: '38px',
+                            gap: '6px'
+                          }}
+                        >
+                          {isSavingAi ? (
+                            <div className="typing-dots"><span></span><span></span><span></span></div>
+                          ) : (
+                            <>
+                              <Bot size={14} />
+                              <span>Save AI Settings</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={handleTestAiConnection}
+                          disabled={isTestingAi}
+                          style={{
+                            height: '38px',
+                            padding: '0 16px',
+                            fontSize: '0.82rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <RefreshCw size={14} className={isTestingAi ? 'spin-anim' : ''} />
+                          <span>{isTestingAi ? 'Testing Connection...' : 'Test AI Connection'}</span>
+                        </button>
+                      </div>
+
                     </div>
                   </div>
                 </div>

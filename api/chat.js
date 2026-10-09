@@ -1,55 +1,95 @@
 /* global Buffer, process */
 import { searchLegalDatabase } from '../src/utils/legalSearch.js';
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
-const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash';
-const API_REVISION = 'gemini-header-auth-v1';
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_GROQ_FALLBACK_MODEL = 'qwen/qwen3.8-27b';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
+const API_REVISION = 'multi-provider-ai-v2';
 
-function normalizeGeminiApiKey(value) {
+function normalizeApiKey(value) {
   return (value || '').trim().replace(/^['"]|['"]$/g, '').trim();
 }
 
-function getGeminiKeyDiagnostics() {
-  const rawKey = process.env.GEMINI_API_KEY || '';
-  const trimmedKey = rawKey.trim();
-  const normalizedKey = normalizeGeminiApiKey(rawKey);
+function isConfigured(value) {
+  return normalizeApiKey(value).length > 0;
+}
+
+function getProviderDiagnostics(customKeys = {}) {
+  const preferredProvider = normalizeProvider(process.env.AI_PROVIDER || 'auto');
+  const geminiKey = normalizeApiKey(customKeys?.geminiApiKey || customKeys?.geminiKey || process.env.GEMINI_API_KEY);
+  const groqKey = normalizeApiKey(customKeys?.groqApiKey || customKeys?.groqKey || process.env.GROQ_API_KEY);
+  const openaiKey = normalizeApiKey(customKeys?.openaiApiKey || customKeys?.openaiKey || process.env.OPENAI_API_KEY);
 
   return {
-    configured: normalizedKey.length > 0,
-    length: rawKey.length,
-    trimmedLength: trimmedKey.length,
-    normalizedLength: normalizedKey.length,
-    prefix: normalizedKey ? `${normalizedKey.slice(0, 4)}...` : '',
-    suffix: normalizedKey ? `...${normalizedKey.slice(-4)}` : '',
-    hasLeadingOrTrailingWhitespace: rawKey !== trimmedKey,
-    hasWrappingQuotes: trimmedKey !== normalizedKey,
-    hasEqualsPrefix: /^GEMINI_API_KEY\s*=/.test(trimmedKey),
-    authTransport: 'x-goog-api-key-header',
     apiRevision: API_REVISION,
-    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
-    fallbackModel: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
+    preferredProvider,
+    configuredProviders: {
+      gemini: isConfigured(geminiKey),
+      groq: isConfigured(groqKey),
+      openai: isConfigured(openaiKey)
+    },
+    models: {
+      gemini: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+      geminiFallback: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL,
+      groq: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
+      openai: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL
+    }
   };
 }
 
-function formatGeminiError(error, diagnostics) {
-  const message = error.message || 'Gemini API failed.';
-  const keyLabel = diagnostics.prefix && diagnostics.suffix
-    ? `${diagnostics.prefix}${diagnostics.suffix}`
-    : 'the configured key';
+function formatAiError(error, diagnostics) {
+  const message = error.message || 'AI provider request failed.';
 
   if (/429|too many requests|quota|rate limit|rate-limits|retryDelay/i.test(message)) {
-    return 'Gemini is temporarily busy or quota-limited. Please try again in about 1 minute.';
+    return 'The AI service is temporarily busy or quota-limited. Please try again in about 1 minute.';
   }
 
   if (/503|overloaded|high demand|temporarily unavailable|unavailable/i.test(message)) {
-    return 'Gemini is temporarily busy. Please try again shortly.';
+    return 'The AI service is temporarily busy. Please try again shortly.';
   }
 
-  if (diagnostics.configured && (error.status === 401 || error.status === 403 || /invalid authentication credentials/i.test(message))) {
-    return `Gemini rejected ${keyLabel} from the production server. The key is present, but Google is not authorizing it from Vercel. Create or rotate a Gemini API key in Google AI Studio, restrict it to the Gemini API only, avoid IP/referrer application restrictions for this serverless deployment, set it as GEMINI_API_KEY in Vercel Production, then redeploy.`;
+  if (error.status === 401 || error.status === 403 || /api key|invalid authentication credentials|unauthorized|forbidden/i.test(message)) {
+    return `The selected AI provider rejected its API key. Please check the configured keys in Admin Dashboard or production environment variables and try again.`;
   }
 
   return message;
+}
+
+function normalizeProvider(value) {
+  const provider = String(value || '').trim().toLowerCase();
+  return ['auto', 'gemini', 'groq', 'openai'].includes(provider) ? provider : 'auto';
+}
+
+function buildProviderPlan(preferredProvider, fallbackProvider, customKeys = {}) {
+  const preferred = normalizeProvider(preferredProvider || process.env.AI_PROVIDER || 'auto');
+  const fallback = normalizeProvider(fallbackProvider || 'groq');
+
+  const configuredProviders = {
+    gemini: isConfigured(customKeys?.geminiApiKey || customKeys?.geminiKey || process.env.GEMINI_API_KEY),
+    groq: isConfigured(customKeys?.groqApiKey || customKeys?.groqKey || process.env.GROQ_API_KEY),
+    openai: isConfigured(customKeys?.openaiApiKey || customKeys?.openaiKey || process.env.OPENAI_API_KEY)
+  };
+  const onlyConfigured = (providers) => providers.filter(provider => configuredProviders[provider]);
+
+  let order;
+  if (preferred === 'auto' || preferred === 'gemini') {
+    // Primary: Gemini, Fallback: Groq, Tertiary: OpenAI
+    order = ['gemini', fallback !== 'gemini' ? fallback : 'groq', 'openai'];
+  } else if (preferred === 'groq') {
+    // Primary: Groq, Fallback: Gemini, Tertiary: OpenAI
+    order = ['groq', fallback !== 'groq' ? fallback : 'gemini', 'openai'];
+  } else if (preferred === 'openai') {
+    // Primary: OpenAI, Fallback: Groq, Tertiary: Gemini
+    order = ['openai', fallback !== 'openai' ? fallback : 'groq', 'gemini'];
+  } else {
+    order = ['gemini', 'groq', 'openai'];
+  }
+
+  const deduped = [...new Set(order)];
+  const plan = onlyConfigured(deduped);
+  return plan.length > 0 ? plan : deduped;
 }
 
 function parseBody(req) {
@@ -265,8 +305,8 @@ function findUnverifiedCaseAuthorities(answerText, verifiedText = '') {
   });
 }
 
-async function generateVerifiedGeminiAnswer(prompt, verifiedText = '') {
-  const firstDraft = await generateGeminiAnswer(prompt);
+async function generateVerifiedAiAnswer(prompt, verifiedText = '', preferredProvider = 'auto', fallbackProvider = 'groq', customKeys = {}, customModels = {}) {
+  const firstDraft = await generateAiAnswer(prompt, preferredProvider, fallbackProvider, customKeys, customModels);
   const unverifiedAuthorities = findUnverifiedCaseAuthorities(firstDraft.text, verifiedText);
 
   if (unverifiedAuthorities.length === 0) {
@@ -280,23 +320,23 @@ ${unverifiedAuthorities.map(item => `- ${item}`).join('\n')}
 
 Rewrite the answer now. Remove every unverified case example, reporter citation, locus classicus claim, public example, or external authority that is not present in the retrieved materials. Do not replace them with new examples. If no verified public example is available from the retrieved materials, say exactly: "No verified public example is available from the current retrieved sources." Keep the answer useful, practical, and end with **In conclusion:**.`;
 
-  return generateGeminiAnswer(rewritePrompt);
+  return generateAiAnswer(rewritePrompt, preferredProvider, fallbackProvider, customKeys, customModels);
 }
 
-function buildGeminiResearchBasis(question) {
+function buildAiResearchBasis(question, provider = 'AI') {
   const source = {
-    id: `gemini-research-${Date.now()}`,
+    id: `ai-research-${Date.now()}`,
     category: 'Research Basis',
-    section: 'Gemini general legal knowledge',
-    title: 'Gemini-generated legal research basis',
-    act: 'Midlex AI / Gemini',
+    section: `${provider} general legal knowledge`,
+    title: 'AI-generated legal research basis',
+    act: `Midlex AI / ${provider}`,
     chapter: 'No matched local source',
     part: 'General Nigerian-law response',
     sourcePage: 'No official page retrieved',
     sourceUrl: '',
     isGeneratedBasis: true,
     content: 'No exact official source or verified public example was retrieved from the Midlex local law database for this question. This card is not an official citation; it explains that the answer was generated without attaching a verified public example.',
-    reasoning: `The question "${cleanString(question, 220)}" did not match a stored Midlex public-code source strongly enough, so Gemini answered from general Nigerian-law knowledge. Unverified case examples should not be used for this answer.`
+    reasoning: `The question "${cleanString(question, 220)}" did not match a stored Midlex public-code source strongly enough, so ${provider} answered from general Nigerian-law knowledge. Unverified case examples should not be used for this answer.`
   };
 
   return {
@@ -388,7 +428,10 @@ async function callGemini(prompt, modelName, apiKey) {
         generationConfig: {
           temperature: 0.25,
           topP: 0.9,
-          maxOutputTokens: 1800
+          maxOutputTokens: 1800,
+          thinkingConfig: {
+            thinkingBudget: 0
+          }
         }
       })
     }
@@ -400,6 +443,7 @@ async function callGemini(prompt, modelName, apiKey) {
     const message = payload?.error?.message || `Gemini request failed with status ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
+    error.provider = 'gemini';
     throw error;
   }
 
@@ -415,37 +459,109 @@ async function callGemini(prompt, modelName, apiKey) {
   return text;
 }
 
-function shouldTryNextGeminiModel(error) {
-  const retryableStatuses = new Set([404, 429, 500, 502, 503, 504]);
-  const message = error.message || '';
+async function callOpenAiCompatibleProvider({ endpoint, apiKey, modelName, prompt, provider }) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are Midlex AI, a careful Nigerian-law assistant. Follow the user prompt exactly.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.25,
+      top_p: 0.9,
+      max_tokens: 1800
+    })
+  });
 
-  return retryableStatuses.has(error.status) || /not found|not supported|high demand|overloaded|temporarily unavailable/i.test(message);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `${provider} request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.provider = provider;
+    throw error;
+  }
+
+  const text = payload?.choices?.[0]?.message?.content?.trim();
+
+  if (!text) {
+    throw new Error(`${provider} returned an empty response.`);
+  }
+
+  return text;
 }
 
-async function generateGeminiAnswer(prompt) {
-  const apiKey = normalizeGeminiApiKey(process.env.GEMINI_API_KEY);
+async function callOpenAi(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.openaiApiKey || customKeys?.openaiKey || process.env.OPENAI_API_KEY);
 
   if (!apiKey) {
-    const error = new Error('GEMINI_API_KEY is not configured on the server.');
+    const error = new Error('OPENAI_API_KEY is not configured.');
     error.status = 503;
+    error.provider = 'openai';
+    throw error;
+  }
+
+  const model = customModels?.openaiModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+
+  return {
+    text: await callOpenAiCompatibleProvider({
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      apiKey,
+      modelName: model,
+      prompt,
+      provider: 'openai'
+    }),
+    provider: 'openai',
+    model
+  };
+}
+
+async function callGroq(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.groqApiKey || customKeys?.groqKey || process.env.GROQ_API_KEY);
+
+  if (!apiKey) {
+    const error = new Error('GROQ_API_KEY is not configured.');
+    error.status = 503;
+    error.provider = 'groq';
     throw error;
   }
 
   const modelNames = [
-    process.env.GEMINI_MODEL || DEFAULT_MODEL,
-    process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
+    customModels?.groqModel || process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
+    DEFAULT_GROQ_FALLBACK_MODEL,
+    'openai/gpt-oss-20b',
+    'llama-3.1-8b-instant'
   ].filter(Boolean);
 
   let lastError;
   for (const modelName of [...new Set(modelNames)]) {
     try {
       return {
-        text: await callGemini(prompt, modelName, apiKey),
+        text: await callOpenAiCompatibleProvider({
+          endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+          apiKey,
+          modelName,
+          prompt,
+          provider: 'groq'
+        }),
+        provider: 'groq',
         model: modelName
       };
     } catch (error) {
       lastError = error;
-      if (!shouldTryNextGeminiModel(error)) {
+      if (!shouldTryNextAiProvider(error)) {
         throw error;
       }
     }
@@ -454,17 +570,97 @@ async function generateGeminiAnswer(prompt) {
   throw lastError;
 }
 
+function shouldTryNextAiProvider(error) {
+  const retryableStatuses = new Set([401, 403, 404, 429, 500, 502, 503, 504]);
+  const message = error.message || '';
+
+  return retryableStatuses.has(error.status) || /not configured|api key|authentication|unauthorized|forbidden|not found|not supported|high demand|overloaded|temporarily unavailable|quota/i.test(message);
+}
+
+async function callGeminiProvider(prompt, customKeys = {}, customModels = {}) {
+  const apiKey = normalizeApiKey(customKeys?.geminiApiKey || customKeys?.geminiKey || process.env.GEMINI_API_KEY);
+
+  if (!apiKey) {
+    const error = new Error('GEMINI_API_KEY is not configured.');
+    error.status = 503;
+    error.provider = 'gemini';
+    throw error;
+  }
+
+  const modelNames = [
+    customModels?.geminiModel || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+    customModels?.geminiFallbackModel || process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL,
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-2.5-flash'
+  ].filter(Boolean);
+
+  let lastError;
+  for (const modelName of [...new Set(modelNames)]) {
+    try {
+      return {
+        text: await callGemini(prompt, modelName, apiKey),
+        provider: 'gemini',
+        model: modelName
+      };
+    } catch (error) {
+      lastError = error;
+      if (!shouldTryNextAiProvider(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function generateAiAnswer(prompt, preferredProvider, fallbackProvider, customKeys, customModels) {
+  const providerPlan = buildProviderPlan(preferredProvider, fallbackProvider, customKeys);
+  let lastError;
+  const primaryProvider = providerPlan[0];
+
+  for (let i = 0; i < providerPlan.length; i++) {
+    const provider = providerPlan[i];
+    try {
+      let result;
+      if (provider === 'gemini') result = await callGeminiProvider(prompt, customKeys, customModels);
+      else if (provider === 'groq') result = await callGroq(prompt, customKeys, customModels);
+      else if (provider === 'openai') result = await callOpenAi(prompt, customKeys, customModels);
+
+      if (result) {
+        return {
+          ...result,
+          fallbackUsed: i > 0,
+          primaryProvider,
+          providerPlan
+        };
+      }
+    } catch (error) {
+      console.warn(`[Midlex AI] ${provider} failed (${error.message || error.status}). Attempting next provider in plan...`);
+      lastError = error;
+      if (!shouldTryNextAiProvider(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('No configured AI provider succeeded.');
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed.' });
   }
 
-  const { message, conversationHistory } = parseBody(req);
+  const { message, conversationHistory, aiProvider, fallbackProvider, customKeys, customModels } = parseBody(req);
 
   if (!message || message.trim() === '') {
     return res.status(400).json({ error: 'Message payload is required.' });
   }
+
+  const preferredProvider = normalizeProvider(aiProvider || process.env.AI_PROVIDER || 'auto');
+  const safeFallbackProvider = normalizeProvider(fallbackProvider || 'groq');
 
   try {
     const cleanMessage = message.trim();
@@ -473,22 +669,27 @@ export default async function handler(req, res) {
     const prompt = buildPrompt(cleanMessage, localMatch, normalizedHistory);
     const hasVerifiedSources = localMatch.sources && localMatch.sources.length > 0;
     const verifiedText = hasVerifiedSources ? `${buildContext(localMatch.sources)}\n${cleanMessage}` : cleanMessage;
-    const generated = await generateVerifiedGeminiAnswer(prompt, verifiedText);
-    const researchBasis = hasVerifiedSources ? null : buildGeminiResearchBasis(cleanMessage);
+    const generated = await generateVerifiedAiAnswer(prompt, verifiedText, preferredProvider, safeFallbackProvider, customKeys, customModels);
+    const providerLabel = generated.provider ? generated.provider.toUpperCase() : 'AI';
+    const researchBasis = hasVerifiedSources ? null : buildAiResearchBasis(cleanMessage, providerLabel);
 
     return res.status(200).json({
       answerText: generated.text,
       sources: hasVerifiedSources ? localMatch.sources : researchBasis.sources,
       reasoning: hasVerifiedSources ? (localMatch.reasoning || []) : researchBasis.reasoning,
-      engine: 'gemini',
-      model: generated.model
+      engine: generated.provider || 'ai',
+      provider: generated.provider || 'ai',
+      model: generated.model,
+      fallbackUsed: !!generated.fallbackUsed,
+      primaryProvider: generated.primaryProvider,
+      requestedProvider: preferredProvider
     });
   } catch (error) {
     const status = error.status || 502;
-    const keyDiagnostics = getGeminiKeyDiagnostics();
+    const keyDiagnostics = getProviderDiagnostics(customKeys);
     return res.status(status).json({
-      error: formatGeminiError(error, keyDiagnostics),
-      engine: 'gemini',
+      error: formatAiError(error, keyDiagnostics),
+      engine: error.provider || preferredProvider || 'ai',
       keyDiagnostics
     });
   }

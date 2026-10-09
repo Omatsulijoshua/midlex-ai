@@ -62,6 +62,23 @@ const buildFrontendResearchBasis = (query) => {
   };
 };
 
+const getSavedAiProvider = () => {
+  const savedProvider = localStorage.getItem('midlex_ai_provider') || 'auto';
+  return ['auto', 'gemini', 'openai', 'groq'].includes(savedProvider) ? savedProvider : 'auto';
+};
+
+const getSavedAiSettings = () => {
+  return {
+    provider: getSavedAiProvider(),
+    fallbackProvider: localStorage.getItem('midlex_ai_fallback_provider') || 'groq',
+    customKeys: {
+      geminiApiKey: localStorage.getItem('midlex_ai_gemini_key') || '',
+      groqApiKey: localStorage.getItem('midlex_ai_groq_key') || '',
+      openaiApiKey: localStorage.getItem('midlex_ai_openai_key') || ''
+    }
+  };
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -86,6 +103,7 @@ function App() {
   const [isSubscribed, setIsSubscribed] = useState(true);
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [showSourcesMobile, setShowSourcesMobile] = useState(false);
+  const [aiProvider, setAiProvider] = useState(getSavedAiProvider);
 
   const activeSourcesCount = activeSources.length || activeReasoning.length || 0;
 
@@ -105,6 +123,20 @@ function App() {
       button.remove();
     };
   }, [activeSourcesCount, showSourcesMobile]);
+
+  useEffect(() => {
+    const handleProviderChange = () => {
+      setAiProvider(getSavedAiProvider());
+    };
+
+    window.addEventListener('midlex-ai-provider-change', handleProviderChange);
+    window.addEventListener('storage', handleProviderChange);
+
+    return () => {
+      window.removeEventListener('midlex-ai-provider-change', handleProviderChange);
+      window.removeEventListener('storage', handleProviderChange);
+    };
+  }, []);
 
   // Track page visits on mount
   useEffect(() => {
@@ -325,6 +357,7 @@ function App() {
 
     try {
       const chatApiUrl = getApiEndpoint('/api/chat', { sameOriginInProduction: true });
+      const currentAiSettings = getSavedAiSettings();
 
       // Attempt backend API fetch
       const response = await fetchWithTimeout(chatApiUrl, {
@@ -341,13 +374,16 @@ function App() {
             email: currentUser.email,
             name: currentUser.name
           } : null,
-          conversationHistory: buildRequestHistory(messages)
+          conversationHistory: buildRequestHistory(messages),
+          aiProvider: currentAiSettings.provider,
+          fallbackProvider: currentAiSettings.fallbackProvider,
+          customKeys: currentAiSettings.customKeys
         }),
-      }, 20000);
+      }, 25000);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Gemini API server returned an error.');
+        throw new Error(errorData.error || 'AI server returned an error.');
       }
 
       const data = await response.json();
@@ -361,7 +397,9 @@ function App() {
       const assistantMessage = { 
         role: 'assistant', 
         content: data.answerText,
-        query: text // save original text
+        query: text,
+        engine: data.provider || data.engine,
+        fallbackUsed: !!data.fallbackUsed
       };
       
       const finalMessages = [...updatedMessages, assistantMessage];

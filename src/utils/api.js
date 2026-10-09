@@ -16,13 +16,13 @@ export function getApiUrl() {
 }
 
 export function getApiEndpoint(path, options = {}) {
+  if (options.sameOriginInProduction && import.meta.env.PROD) {
+    return path;
+  }
+
   const apiUrl = getApiUrl();
   if (apiUrl) {
     return `${apiUrl}${path}`;
-  }
-
-  if (options.sameOriginInProduction && import.meta.env.PROD) {
-    return path;
   }
 
   return path;
