@@ -1,4 +1,4 @@
-const DEFAULT_PRODUCTION_API_URL = 'https://midlex-ai-backend.onrender.com';
+const DEFAULT_PRODUCTION_API_URL = 'https://midlex-ai.thispage.xyz';
 
 export function getApiUrl() {
   const configuredUrl = (
@@ -12,11 +12,11 @@ export function getApiUrl() {
     return DEFAULT_PRODUCTION_API_URL;
   }
 
-  return configuredUrl;
+  return configuredUrl || (import.meta.env.PROD ? DEFAULT_PRODUCTION_API_URL : '');
 }
 
 export function getApiEndpoint(path, options = {}) {
-  if (options.sameOriginInProduction && import.meta.env.PROD) {
+  if (options.sameOrigin) {
     return path;
   }
 

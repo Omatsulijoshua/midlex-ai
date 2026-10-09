@@ -663,8 +663,17 @@ async function generateAiAnswer(prompt, preferredProvider, fallbackProvider, cus
 }
 
 export default async function handler(req, res) {
+  // Enable CORS for cross-domain communication (frontend on midlex.thispage.xyz -> AI on midlex-ai.thispage.xyz)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, x-goog-api-key');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    res.setHeader('Allow', 'POST, OPTIONS');
     return res.status(405).json({ error: 'Method not allowed.' });
   }
 

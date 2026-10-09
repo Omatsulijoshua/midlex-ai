@@ -240,7 +240,7 @@ export function AdminDashboardModal({ onClose }) {
     setPublishSuccess('');
 
     try {
-      const chatApiUrl = getApiEndpoint('/api/chat', { sameOriginInProduction: true });
+      const chatApiUrl = getApiEndpoint('/api/chat');
       const testStart = Date.now();
       const response = await fetchWithTimeout(chatApiUrl, {
         method: 'POST',

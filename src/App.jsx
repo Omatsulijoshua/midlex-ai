@@ -356,7 +356,7 @@ function App() {
     const startTime = Date.now();
 
     try {
-      const chatApiUrl = getApiEndpoint('/api/chat', { sameOriginInProduction: true });
+      const chatApiUrl = getApiEndpoint('/api/chat');
       const currentAiSettings = getSavedAiSettings();
 
       // Attempt backend API fetch
