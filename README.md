@@ -14,8 +14,7 @@ Midlex AI is an intelligent legal research, analysis, and advisory assistant spe
 
 ## Live Deployments
 
-- **Production URL**: [https://midlex-ai.thispage.xyz](https://midlex-ai.thispage.xyz)
-- **Alternate Mirror**: [https://midlex.thispage.xyz](https://midlex.thispage.xyz)
+- **Official Web Application**: [https://midlex-ai.thispage.xyz](https://midlex-ai.thispage.xyz)
 - **Repository**: [https://github.com/Omatsulijoshua/midlex-ai](https://github.com/Omatsulijoshua/midlex-ai)
 
 ---
@@ -227,9 +226,8 @@ The project is structured to deploy smoothly to Vercel with zero extra server co
    ```
 
 3. **Domain Assignment**:
-   Configure custom domains in the Vercel dashboard:
-   - `midlex-ai.thispage.xyz`
-   - `midlex.thispage.xyz`
+   The official domain is configured exclusively as:
+   - `https://midlex-ai.thispage.xyz`
 
 ---
 

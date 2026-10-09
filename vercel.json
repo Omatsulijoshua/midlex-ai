@@ -4,5 +4,18 @@
     "api/chat.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "midlex.thispage.xyz"
+        }
+      ],
+      "destination": "https://midlex-ai.thispage.xyz/:path*",
+      "permanent": true
+    }
+  ]
 }
