@@ -14,8 +14,7 @@ Midlex AI is an intelligent legal research, analysis, and advisory assistant spe
 
 ## Live Deployments
 
-- **Frontend Web Application (UI)**: [https://midlex.thispage.xyz](https://midlex.thispage.xyz)
-- **AI Engine & API Backend**: [https://midlex-ai.thispage.xyz](https://midlex-ai.thispage.xyz)
+- **Production Web Application & AI Engine**: [https://midlex-ai.thispage.xyz](https://midlex-ai.thispage.xyz)
 - **Repository**: [https://github.com/Omatsulijoshua/midlex-ai](https://github.com/Omatsulijoshua/midlex-ai)
 
 ---
